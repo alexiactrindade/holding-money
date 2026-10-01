@@ -33,9 +33,23 @@ function brl(v) {
   return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function logAction(db, usuario, acao, entidade, id, detalhes) {
-  db.prepare('INSERT INTO historico (usuario, acao, entidade, registro_id, detalhes) VALUES (?, ?, ?, ?, ?)')
-    .run(usuario, acao, entidade, id, detalhes ? String(detalhes).slice(0, 2000) : null);
+async function logAction(db, usuario, acao, entidade, id, detalhes) {
+  await db
+    .prepare(`
+      INSERT INTO historico
+        (usuario, acao, entidade, registro_id, detalhes)
+      VALUES
+        (?, ?, ?, ?, ?)
+    `)
+    .run(
+      usuario,
+      acao,
+      entidade,
+      id,
+      detalhes
+        ? String(detalhes).slice(0, 2000)
+        : null
+    );
 }
 
 module.exports = { rateLimit, isoDate, addDays, daysBetween, brl, logAction };

@@ -86,7 +86,12 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ erro: err.type === 'entity.parse.failed' ? 'Não foi possível ler as informações enviadas. Recarregue a página e tente de novo.' : 'Algo deu errado ao processar seu pedido. Tente de novo em instantes.' });
 });
 
-const PORT = Number(process.env.PORT) || 3000;
-app.listen(PORT, () => {
-  console.log(`Holding Money rodando em http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  const PORT = Number(process.env.PORT) || 3000;
+
+  app.listen(PORT, () => {
+    console.log(`Holding Money rodando em http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
