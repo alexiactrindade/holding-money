@@ -276,10 +276,7 @@ const Views = {
         ? `<div class="msg msg-user">${H.esc(x.conteudo)}</div>`
         : `<div class="msg msg-ai">${H.md(x.conteudo)}</div>`).join('')
         : `<div class="p-4 bg-light rounded-3 border text-center my-auto" style="max-width:680px; margin: 2.5rem auto;">
-            <div class="mb-2"><i class="bi bi-cpu fs-1 text-teal"></i></div>
-            <h3 class="h4 fw-bold mb-2">${H.esc(agente === 'Core' ? 'Holding Money Core' : 'Agente ' + agente)}</h3>
-            <p class="text-muted mb-3 fs-6">${H.esc(perg ? 'Pergunta central: ' + perg : '')}</p>
-            <p class="small text-secondary mb-0">Envie uma mensagem abaixo ou clique em um dos atalhos rápidos para orientar sua decisão comercial.</p>
+            <p class="small text-secondary mb-0">escolha seu agente e comece a conversar</p>
           </div>`;
       log.scrollTop = log.scrollHeight;
     };
