@@ -275,7 +275,7 @@ const Views = {
       const txt = m.value.trim(); if (!txt) return;
       const btn = e.target.querySelector('[type=submit]');
       btn.disabled = true; m.value = '';
-      log.insertAdjacentHTML('beforeend', `<div class="msg msg-user">${H.esc(txt)}</div><div class="msg msg-ai text-muted" id="typing">Analisando os dados do negócio…</div>`);
+      log.insertAdjacentHTML('beforeend', `<div class="msg msg-user">${H.esc(txt)}</div><div class="msg msg-ai text-muted" id="typing">Pensando em uma resposta...</div>`);
       log.scrollTop = log.scrollHeight;
       try {
         const r = await API.post('/core/chat', { mensagem: txt, agente });

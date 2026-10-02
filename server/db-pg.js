@@ -135,12 +135,29 @@ function injectContaId(text) {
     )
   );
 
-  if (colunas) {
-    if (/\bconta_id\b/i.test(colunas[1])) return null; // já inclui conta_id
-    const inicio = colunas.index + colunas[0].indexOf('(') + 1;
-    const fim = colunas.index + colunas[0].lastIndexOf(')');
-    return text.slice(0, inicio) + 'conta_id, ' + text.slice(inicio, fim) + ', $1' + text.slice(fim);
-  }
+if (colunas) {
+  if (/\bconta_id\b/i.test(colunas[1])) return null;
+
+  const inicio = colunas.index + colunas[0].indexOf('(') + 1;
+  const fim = colunas.index + colunas[0].lastIndexOf(')');
+
+  const valoresIndex = text.toUpperCase().indexOf('VALUES', fim);
+
+  if (valoresIndex === -1) return null;
+
+  const abreValores = text.indexOf('(', valoresIndex);
+
+  if (abreValores === -1) return null;
+
+  return (
+    text.slice(0, inicio) +
+    'conta_id, ' +
+    text.slice(inicio, fim) +
+    text.slice(fim, abreValores + 1) +
+    '$1, ' +
+    text.slice(abreValores + 1)
+  );
+}
 
   // INSERT sem lista de colunas (ex.: INSERT INTO tabela VALUES ...)
   const idx = text.toUpperCase().indexOf('VALUES');
