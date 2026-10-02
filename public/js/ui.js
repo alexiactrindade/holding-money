@@ -34,18 +34,18 @@ const UI = {
   rowActions(entity, r) {
     const b = [];
     if (entity === 'leads') {
-      if (r.contato && H.isPhone(r.contato)) b.push(`<a class="btn btn-sm btn-light" target="_blank" rel="noopener" href="${H.waLink(r.contato, r.mensagem_followup || '')}" title="Abrir WhatsApp" data-stop><i class="bi bi-whatsapp"></i></a>`);
-      if (!['Cliente', 'Perdido'].includes(r.estagio)) b.push(`<button class="btn btn-sm btn-light" data-act="contatado" data-id="${r.id}" title="Marcar contato feito hoje e agendar próximo em 2 dias"><i class="bi bi-check2"></i> Contatado</button>`);
+      if (r.contato && H.isPhone(r.contato)) b.push(`<a class="btn btn-sm btn-light" target="_blank" rel="noopener" href="${H.waLink(r.contato, r.mensagem_followup || '')}" title="Abrir WhatsApp" data-stop>WhatsApp</a>`);
+      if (!['Cliente', 'Perdido'].includes(r.estagio)) b.push(`<button class="btn btn-sm btn-light" data-act="contatado" data-id="${r.id}" title="Marcar contato feito hoje e agendar próximo em 2 dias">Contatado</button>`);
     }
     if (entity === 'aprovacoes' && r.status === 'Pendente' && App.user.papel === 'admin') {
       b.push(`<button class="btn btn-sm btn-teal" data-act="aprovar" data-id="${r.id}">Aprovar</button>`);
       b.push(`<button class="btn btn-sm btn-light" data-act="recusar" data-id="${r.id}">Recusar</button>`);
     }
     if (entity === 'tarefas' && !['Concluída', 'Cortada'].includes(r.status)) {
-      b.push(`<button class="btn btn-sm btn-teal" data-act="concluir" data-id="${r.id}" title="Marcar como concluída"><i class="bi bi-check2"></i> Concluir</button>`);
-      b.push(`<button class="btn btn-sm btn-light" data-act="cancelar" data-id="${r.id}" title="Cancelar tarefa"><i class="bi bi-x-lg"></i> Cancelar</button>`);
+      b.push(`<button class="btn btn-sm btn-teal" data-act="concluir" data-id="${r.id}" title="Marcar como concluída">Concluir</button>`);
+      b.push(`<button class="btn btn-sm btn-light" data-act="cancelar" data-id="${r.id}" title="Cancelar tarefa">Cancelar</button>`);
     }
-    if (entity === 'scripts') b.push(`<button class="btn btn-sm btn-light" data-act="copiar" data-id="${r.id}"><i class="bi bi-clipboard"></i> Copiar</button>`);
+    if (entity === 'scripts') b.push(`<button class="btn btn-sm btn-light" data-act="copiar" data-id="${r.id}">Copiar</button>`);
     if (entity === 'diagnosticos') b.push(`<button class="btn btn-sm btn-light" data-act="ver" data-id="${r.id}">Ver resultado</button>`);
     if (entity === 'propostas' && r.status === 'Rascunho') b.push(`<button class="btn btn-sm btn-light" data-act="pedir-aprovacao" data-id="${r.id}">Pedir aprovação</button>`);
     return b.join(' ');
@@ -56,21 +56,21 @@ const UI = {
     if (!def) { root.innerHTML = '<p>Área não encontrada.</p>'; return; }
     const filterField = def.fields.find((f) => f.filter);
     const cols = [...def.fields.filter((f) => f.list && !f.hidden), ...(def.computed || [])];
-    const extra = entity === 'leads' ? `<a class="btn btn-light" href="#/leads"><i class="bi bi-kanban"></i> Funil</a>` : '';
+    const extra = entity === 'leads' ? `<a class="btn btn-light" href="#/leads">Funil</a>` : '';
 
     root.innerHTML = `
       <div class="page-head">
         <div><h1>${H.esc(def.label)}</h1><p>${H.esc(def.help || '')}</p></div>
         <div class="d-flex gap-2 no-print">${extra}
-          ${App.iaDisp && IA.ENTIDADES.includes(entity) ? '<button class="btn btn-light" id="btnIA"><i class="bi bi-stars text-gold"></i> Sugerir com IA</button>' : ''}
-          ${def.readonly ? '' : `<button class="btn btn-primary" id="btnNovo"><i class="bi bi-plus-lg"></i> ${H.g(def, 'Novo', 'Nova')} ${H.esc(def.singular)}</button>`}
+          ${App.iaDisp && IA.ENTIDADES.includes(entity) ? '<button class="btn btn-light" id="btnIA">Sugerir com IA</button>' : ''}
+          ${def.readonly ? '' : `<button class="btn btn-primary" id="btnNovo">${H.g(def, 'Novo', 'Nova')} ${H.esc(def.singular)}</button>`}
         </div>
       </div>
       <div class="d-flex flex-wrap gap-2 mb-3 no-print">
         <input type="search" class="form-control" style="max-width:280px" id="q" placeholder="Buscar" aria-label="Buscar">
         ${filterField ? `<select class="form-select" style="max-width:220px" id="flt" aria-label="Filtrar por ${H.esc(filterField.label)}">
           <option value="">${H.esc(filterField.label)}: todos</option>${filterField.options.map((o) => `<option>${H.esc(o)}</option>`).join('')}</select>` : ''}
-        ${def.exportavel ? '<button class="btn btn-light ms-auto" id="btnCsv"><i class="bi bi-download"></i> Exportar CSV</button>' : ''}
+        ${def.exportavel ? '<button class="btn btn-light ms-auto" id="btnCsv">Exportar CSV</button>' : ''}
       </div>
       <div id="tbl"></div>`;
 
@@ -97,7 +97,7 @@ const UI = {
       if (!rows.length) {
         tbl.innerHTML = `<div class="panel panel-mist text-center py-5"><p class="mb-3">${H.g(def, 'Nenhum', 'Nenhuma')} ${H.esc(def.singular)} por aqui ainda.</p>
           <div class="d-flex gap-2 justify-content-center flex-wrap">${def.readonly ? '' : `<button class="btn btn-primary" data-act="novo">${H.g(def, 'Criar o primeiro', 'Criar a primeira')}</button>`}
-          ${App.iaDisp && IA.ENTIDADES.includes(entity) ? '<button class="btn btn-light" data-ia><i class="bi bi-stars text-gold"></i> Sugerir com IA</button>' : ''}</div></div>`;
+          ${App.iaDisp && IA.ENTIDADES.includes(entity) ? '<button class="btn btn-light" data-ia>Sugerir com IA</button>' : ''}</div></div>`;
         return;
       }
       const prioCol = entity === 'tarefas';

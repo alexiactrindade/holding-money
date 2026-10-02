@@ -14,7 +14,7 @@ const Views = {
       ${d.vazio ? `<section class="panel start-panel mb-4" aria-label="Comece por aqui">
         <div><div class="panel-title mb-1">Comece por aqui</div>
         <p class="mb-0 text-muted">O sistema está vazio de propósito: tudo nasce do contexto da sua empresa. ${App.user.papel === 'admin' ? 'Conte sobre o negócio e receba uma proposta de estrutura, ou cadastre cada área manualmente.' : 'Peça ao fundador para preencher o contexto da empresa.'}</p></div>
-        ${App.user.papel === 'admin' ? '<div class="d-flex gap-2 flex-wrap"><a class="btn btn-primary" href="#/onboarding"><i class="bi bi-building"></i> Contexto da empresa</a><a class="btn btn-light" href="#/onboarding?passo=estrutura"><i class="bi bi-stars text-gold"></i> Montar estrutura</a></div>' : ''}
+        ${App.user.papel === 'admin' ? '<div class="d-flex gap-2 flex-wrap"><a class="btn btn-primary" href="#/onboarding">Contexto da empresa</a><a class="btn btn-light" href="#/onboarding?passo=estrutura">Montar estrutura</a></div>' : ''}
       </section>` : ''}
 
       <section class="money-hero mb-4" aria-label="Ação de dinheiro do dia">
@@ -66,7 +66,7 @@ const Views = {
             <div class="panel-title">Follow-up de hoje <a href="#/leads">Funil</a></div>
             ${d.dinheiroAgora.followHoje.length ? `<ul class="mini-list">${d.dinheiroAgora.followHoje.map((l) => `
               <li><div><a href="#/e/leads/${l.id}" class="fw-semibold text-body">${H.esc(l.nome)}</a><div class="meta">${H.esc(l.canal || 'sem canal')} · ${H.esc(l.estagio)}${l.proximo_contato < d.hoje ? ' · <span class="text-danger">atrasado</span>' : ''}</div></div>
-              <div class="d-flex gap-1 align-items-center">${H.tag(l.temperatura)}${l.contato && H.isPhone(l.contato) ? `<a class="btn btn-sm btn-light" target="_blank" rel="noopener" href="${H.waLink(l.contato, l.mensagem_followup || '')}" aria-label="WhatsApp"><i class="bi bi-whatsapp"></i></a>` : ''}</div></li>`).join('')}</ul>` : '<p class="empty">Nenhum follow-up para hoje.</p>'}
+              <div class="d-flex gap-1 align-items-center">${H.tag(l.temperatura)}${l.contato && H.isPhone(l.contato) ? `<a class="btn btn-sm btn-light" target="_blank" rel="noopener" href="${H.waLink(l.contato, l.mensagem_followup || '')}">WhatsApp</a>` : ''}</div></li>`).join('')}</ul>` : '<p class="empty">Nenhum follow-up para hoje.</p>'}
           </div>
           <div class="panel">
             <div class="panel-title">Seus produtos</div>
@@ -150,7 +150,7 @@ const Views = {
     };
     root.innerHTML = `
       <div class="page-head"><div><h1>Funil de leads</h1><p>Arraste o lead para mudar de etapa. Borda vermelha indica follow-up atrasado.</p></div>
-        <div class="d-flex gap-2"><a class="btn btn-light" href="#/e/leads"><i class="bi bi-table"></i> Tabela</a><button class="btn btn-primary" id="novo"><i class="bi bi-plus-lg"></i> Novo lead</button></div></div>
+        <div class="d-flex gap-2"><a class="btn btn-light" href="#/e/leads">Tabela</a><button class="btn btn-primary" id="novo">Novo lead</button></div></div>
       <div class="kanban" id="kb"></div>`;
     await load();
     const kb = root.querySelector('#kb');
@@ -175,7 +175,7 @@ const Views = {
     const admin = App.user.papel === 'admin';
     root.innerHTML = `
       <div class="page-head"><div><h1>Aprovações</h1><p>Ações sensíveis passam pelo fundador antes de acontecer. ${admin ? 'Aprove ou recuse cada pedido, ou arraste o cartão para a coluna Aprovada.' : 'Acompanhe aqui os seus pedidos.'}</p></div>
-        <button class="btn btn-primary" id="novo"><i class="bi bi-plus-lg"></i> Novo pedido</button></div>
+        <button class="btn btn-primary" id="novo">Novo pedido</button></div>
       <div class="kanban kanban-ap" id="kb"></div>
       <details class="mt-3" id="rec"><summary class="small fw-semibold"></summary><ul class="mini-list mt-2" id="recl"></ul></details>`;
     const card = (r, aprovada) => `<div class="kcard ${aprovada ? 'ok' : ''}" ${admin && !aprovada ? 'draggable="true"' : ''} data-id="${r.id}">
@@ -193,7 +193,7 @@ const Views = {
       root.querySelector('#kb').innerHTML = tipos.map((t) => {
         const items = pend.filter((r) => r.tipo === t);
         return `<div class="kcol"><div class="kcol-head"><span>${H.esc(t)}</span><span>${items.length || ''}</span></div>${items.map((r) => card(r, false)).join('') || '<p class="kempty">Nada pendente</p>'}</div>`;
-      }).join('') + `<div class="kcol kcol-ok" data-drop="aprovada"><div class="kcol-head"><span><i class="bi bi-check2-circle"></i> Aprovada</span><span>${aprov.length || ''}</span></div>${aprov.slice(0, 30).map((r) => card(r, true)).join('') || '<p class="kempty">Nenhuma ainda</p>'}</div>`;
+      }).join('') + `<div class="kcol kcol-ok" data-drop="aprovada"><div class="kcol-head"><span>Aprovada</span><span>${aprov.length || ''}</span></div>${aprov.slice(0, 30).map((r) => card(r, true)).join('') || '<p class="kempty">Nenhuma ainda</p>'}</div>`;
       const rec = root.querySelector('#rec');
       rec.classList.toggle('d-none', !recus.length);
       rec.querySelector('summary').textContent = `Recusadas (${recus.length})`;
@@ -219,37 +219,24 @@ const Views = {
 
   // ---------------- Agentes ----------------
   async core(root) {
-    const [status, agentes] = await Promise.all([API.get('/core/status'), API.get('/e/agentes?ativo=Sim')]);
-    agentes.sort((a, b) => a.id - b.id);
-    let agente = sessionStorage.getItem('hm_agente') || 'Core';
+    const status = await API.get('/core/status');
+    const agente = 'Core';
     const comandos = [
       'Me diga onde tem dinheiro parado agora.',
       'Priorize minhas ações da semana.',
       'Quais leads precisam de follow-up hoje?',
     ];
     root.innerHTML = `
-      <div class="page-head"><div><h1>Agentes</h1><p>Converse com o Core ou com os especialistas. Eles analisam seus produtos, ofertas, leads e indicadores e respondem com uma decisão e a próxima ação prática.</p></div>
-        <div class="d-flex gap-2 align-items-center">${App.user.papel === 'admin' ? '<button class="btn btn-light" id="cfgAg"><i class="bi bi-sliders"></i> Configurar agentes</button>' : ''}
-        ${status.disponivel ? `<span class="ia-pill ${status.ativa ? 'on' : ''}">${status.ativa ? '<i class="bi bi-stars"></i> IA ligada' : 'Modo básico'}</span>` : ''}</div></div>
+      <div class="page-head"><div><h1>Holding Money Core</h1><p>Converse sobre as decisões e oportunidades do seu negócio.</p></div>
+        ${status.disponivel ? `<span class="ia-pill ${status.ativa ? 'on' : ''}">${status.ativa ? 'IA ligada' : 'Modo básico'}</span>` : ''}</div>
       ${IA.bannerSemIA('No modo básico, o Core responde com alertas e prioridades calculados a partir dos seus dados. Com a IA ativada, ele analisa ideias, escreve ofertas, campanhas e mensagens.')}
       <div class="row g-3">
-        <div class="col-lg-3 col-xl-2"><div class="panel agent-list">
-          <div class="panel-title">Quem responde</div>
-          <a href="#" class="side-link" data-ag="Core"><i class="bi bi-cpu"></i> Core (coordenação)</a>
-          ${agentes.map((a) => `<a href="#" class="side-link" data-ag="${H.esc(a.nome)}" title="${H.esc(a.pergunta)}"><i class="bi bi-person-gear"></i> ${H.esc(a.nome)}</a>`).join('')}
-        </div></div>
-        <div class="col-lg-9 col-xl-10">
+        <div class="col-12">
           <div class="chat">
             <div class="chat-header d-flex justify-content-between align-items-center">
-              <div>
-                <div class="d-flex align-items-center gap-2">
-                  <h2 class="h5 mb-0 fw-bold" id="chatAgNome">${H.esc(agente === 'Core' ? 'Core' : 'Agente ' + agente)}</h2>
-                  <span class="badge rounded-pill bg-light text-navy border" id="chatAgTipo">${H.esc(agente === 'Core' ? 'Coordenação e Decisão' : 'Especialista')}</span>
-                </div>
-                <div class="text-muted small mt-1" id="chatAgPergunta"></div>
-              </div>
+              <h2 class="h5 mb-0 fw-bold">Holding Money Core</h2>
               <div class="d-flex align-items-center gap-2">
-                <button class="btn btn-sm btn-outline-secondary" type="button" id="clr" title="Limpar histórico deste agente"><i class="bi bi-trash3"></i> Limpar conversa</button>
+                <button class="btn btn-sm btn-outline-secondary" type="button" id="clr">Limpar conversa</button>
               </div>
             </div>
             <div class="chat-log" id="log" aria-live="polite"></div>
@@ -266,28 +253,15 @@ const Views = {
     const log = root.querySelector('#log');
     const m = root.querySelector('#m');
     const render = (items) => {
-      const curAg = agentes.find((a) => a.nome === agente);
-      const perg = agente === 'Core' ? 'Onde existe dinheiro parado, mal estruturado ou ainda não capturado?' : (curAg?.pergunta || '');
-      root.querySelector('#chatAgNome').textContent = agente === 'Core' ? 'Holding Money Core' : 'Agente ' + agente;
-      root.querySelector('#chatAgTipo').textContent = agente === 'Core' ? 'Coordenação Central' : 'Especialista em ' + agente;
-      root.querySelector('#chatAgPergunta').textContent = perg ? `Pergunta central: ${perg}` : '';
-
       log.innerHTML = items.length ? items.map((x) => x.papel === 'user'
         ? `<div class="msg msg-user">${H.esc(x.conteudo)}</div>`
         : `<div class="msg msg-ai">${H.md(x.conteudo)}</div>`).join('')
         : `<div class="p-4 bg-light rounded-3 border text-center my-auto" style="max-width:680px; margin: 2.5rem auto;">
-            <p class="small text-secondary mb-0">escolha seu agente e comece a conversar</p>
+            <p class="small text-secondary mb-0">Vamos conversar sobre o seu negócio?</p>
           </div>`;
       log.scrollTop = log.scrollHeight;
     };
-    const loadHist = async () => {
-      root.querySelectorAll('[data-ag]').forEach((a) => a.classList.toggle('active', a.dataset.ag === agente));
-      render(await API.get(`/core/historico?agente=${encodeURIComponent(agente)}`));
-    };
-    root.querySelector('.agent-list').addEventListener('click', (e) => {
-      const a = e.target.closest('[data-ag]'); if (!a) return;
-      e.preventDefault(); agente = a.dataset.ag; sessionStorage.setItem('hm_agente', agente); loadHist();
-    });
+    const loadHist = async () => render(await API.get(`/core/historico?agente=${encodeURIComponent(agente)}`));
     root.querySelector('#chips').addEventListener('click', (e) => {
       const c = e.target.closest('.chip'); if (!c) return;
       const full = comandos.find((x) => x.startsWith(c.textContent));
@@ -296,7 +270,6 @@ const Views = {
     });
     m.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); root.querySelector('#f').requestSubmit(); } });
     root.querySelector('#clr').addEventListener('click', async () => { await API.del(`/core/historico?agente=${encodeURIComponent(agente)}`); loadHist(); });
-    root.querySelector('#cfgAg')?.addEventListener('click', () => Views.configurarAgentes(() => Views.core(root)));
     root.querySelector('#f').addEventListener('submit', async (e) => {
       e.preventDefault();
       const txt = m.value.trim(); if (!txt) return;
@@ -349,16 +322,16 @@ const Views = {
     const atual = id ? await API.get(`/relatorios/${id}`).catch(() => null) : null;
     root.innerHTML = `
       <div class="page-head"><div><h1>Relatório semanal</h1><p>Relatório para decisão. O sistema preenche com os dados dos últimos 7 dias; você revisa e completa.</p></div>
-        <div class="d-flex gap-2 no-print"><button class="btn btn-primary" id="gerar"><i class="bi bi-magic"></i> Gerar relatório da semana</button></div></div>
+        <div class="d-flex gap-2 no-print"><button class="btn btn-primary" id="gerar">Gerar relatório da semana</button></div></div>
       <div class="row g-3">
         <div class="col-lg-3 no-print"><div class="panel">
           <div class="panel-title">Relatórios</div>
-          ${lista.length ? lista.map((r) => `<a class="side-link ${atual?.id === r.id ? 'active' : ''}" href="#/relatorios/${r.id}"><i class="bi bi-file-text"></i> ${H.date(r.semana_inicio)} a ${H.date(r.semana_fim)}</a>`).join('') : '<p class="empty">Nenhum relatório ainda.</p>'}
+          ${lista.length ? lista.map((r) => `<a class="side-link ${atual?.id === r.id ? 'active' : ''}" href="#/relatorios/${r.id}">${H.date(r.semana_inicio)} a ${H.date(r.semana_fim)}</a>`).join('') : '<p class="empty">Nenhum relatório ainda.</p>'}
         </div></div>
         <div class="col-lg-9">${atual ? `
           <form id="f" class="panel">
             <div class="d-flex justify-content-between align-items-center mb-3"><h2 class="mb-0">Semana de ${H.date(atual.semana_inicio)} a ${H.date(atual.semana_fim)}</h2>
-              <div class="d-flex gap-2 no-print"><button type="button" class="btn btn-light" id="print"><i class="bi bi-printer"></i> Imprimir</button><button type="button" class="btn btn-link text-danger" id="del">Excluir</button></div></div>
+              <div class="d-flex gap-2 no-print"><button type="button" class="btn btn-light" id="print">Imprimir</button><button type="button" class="btn btn-link text-danger" id="del">Excluir</button></div></div>
             ${secoes.map(([k, label], i) => `<div class="mb-3"><label class="form-label h3 d-block" for="s_${k}">${i + 1}. ${H.esc(label)}</label>
               <textarea class="form-control" id="s_${k}" name="${k}" rows="${Math.min(10, Math.max(2, (atual.secoes[k] || '').split('\n').length + 1))}">${H.esc(atual.secoes[k] || '')}</textarea></div>`).join('')}
             <button class="btn btn-primary no-print" type="submit">Salvar relatório</button>
@@ -376,38 +349,6 @@ const Views = {
         try { await API.put(`/relatorios/${atual.id}`, { secoes: Object.fromEntries(new FormData(e.target)) }); H.toast('Relatório salvo.'); } catch (err) { H.toast(err.message, 'error'); }
       });
     }
-  },
-
-  // ---------------- Score Holding Money ----------------
-  // Configuração dos agentes (modal aberto a partir da tela Agentes)
-  async configurarAgentes(onClose) {
-    const el = document.createElement('div');
-    el.className = 'modal fade'; el.tabIndex = -1;
-    el.innerHTML = `<div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
-      <div class="modal-header"><h2 class="modal-title">Configurar agentes</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
-      <div class="modal-body"><p class="text-muted small">Ative os especialistas que fazem sentido para o seu negócio e ajuste a função e as instruções de cada um.</p><ul class="mini-list" id="agl"></ul></div>
-      <div class="modal-footer"><button class="btn btn-light me-auto" id="novoAg"><i class="bi bi-plus-lg"></i> Novo agente</button><button type="button" class="btn btn-primary" data-bs-dismiss="modal">Pronto</button></div>
-    </div></div>`;
-    document.body.appendChild(el);
-    const modal = new bootstrap.Modal(el);
-    let mudou = false;
-    const carregar = async () => {
-      const ags = (await API.get('/e/agentes')).sort((a, b) => a.id - b.id);
-      el.querySelector('#agl').innerHTML = ags.map((a) => `<li><div class="form-check form-switch mb-0 me-2"><input class="form-check-input" type="checkbox" role="switch" data-on="${a.id}" id="ag${a.id}" ${a.ativo === 'Sim' ? 'checked' : ''}><label class="visually-hidden" for="ag${a.id}">Ativar ${H.esc(a.nome)}</label></div>
-        <div class="flex-grow-1"><strong>${H.esc(a.nome)}</strong><div class="meta">${H.esc(a.funcao || '')}</div></div>
-        <button class="btn btn-sm btn-light" data-ed="${a.id}">Editar</button></li>`).join('');
-      el.querySelectorAll('[data-on]').forEach((sw) => sw.addEventListener('change', async () => {
-        try { await API.put(`/e/agentes/${sw.dataset.on}`, { ativo: sw.checked ? 'Sim' : 'Não' }); mudou = true; } catch (err) { sw.checked = !sw.checked; H.toast(err.message, 'error'); }
-      }));
-      el.querySelectorAll('[data-ed]').forEach((b) => b.addEventListener('click', () => {
-        const row = ags.find((a) => a.id === Number(b.dataset.ed));
-        modal.hide(); UI.openForm('agentes', row, () => { mudou = true; }, {}, () => Views.configurarAgentes(onClose));
-      }));
-    };
-    el.querySelector('#novoAg').addEventListener('click', () => { modal.hide(); UI.openForm('agentes', null, () => { mudou = true; }, { ativo: 'Sim' }, () => Views.configurarAgentes(onClose)); });
-    el.addEventListener('hidden.bs.modal', () => { el.remove(); if (mudou && onClose) onClose(); });
-    await carregar();
-    modal.show();
   },
 
   async identidade(root) {
@@ -437,9 +378,9 @@ const Views = {
   // ---------------- Configurações (fora do menu principal) ----------------
   async ajustes(root, aba) {
     const admin = App.user.papel === 'admin';
-    const abas = AJUSTES.filter(([, , , req]) => req !== 'admin' || admin);
+    const abas = AJUSTES.filter(([, , req]) => req !== 'admin' || admin);
     const atual = abas.find(([k]) => k === aba)?.[0] || abas[0][0];
-    root.innerHTML = `<nav class="ajustes-tabs mb-4" aria-label="Configurações">${abas.map(([k, icon, label]) => `<a href="#/ajustes/${k}" class="${k === atual ? 'on' : ''}" ${k === atual ? 'aria-current="page"' : ''}><i class="bi bi-${icon}"></i> ${H.esc(label)}</a>`).join('')}</nav><div id="aj"></div>`;
+    root.innerHTML = `<nav class="ajustes-tabs mb-4" aria-label="Configurações">${abas.map(([k, label]) => `<a href="#/ajustes/${k}" class="${k === atual ? 'on' : ''}" ${k === atual ? 'aria-current="page"' : ''}>${H.esc(label)}</a>`).join('')}</nav><div id="aj"></div>`;
     const box = root.querySelector('#aj');
     if (atual === 'formularios') await Views.integracoes(box);
     else await Views.usuarios(box);
@@ -455,9 +396,9 @@ const Views = {
         <p class="text-muted small mt-2">Cole o endereço e a chave abaixo na sua ferramenta de automação. Cada contato enviado entra direto no funil de leads.</p>
         <div class="row g-3 mt-1">
           <div class="col-lg-7"><label class="form-label" for="wurl">Endereço de envio (Webhook URL)</label>
-            <div class="input-group"><input class="form-control" id="wurl" readonly value="${H.esc(i.webhookUrl)}"><button class="btn btn-light" data-copyval="#wurl"><i class="bi bi-clipboard"></i> Copiar</button></div></div>
+            <div class="input-group"><input class="form-control" id="wurl" readonly value="${H.esc(i.webhookUrl)}"><button class="btn btn-light" data-copyval="#wurl">Copiar</button></div></div>
           <div class="col-lg-5"><label class="form-label" for="wtok">Chave de acesso (Token)</label>
-            <div class="input-group"><input class="form-control" id="wtok" type="password" readonly value="${H.esc(i.webhookToken)}"><button class="btn btn-light" id="show" aria-label="Mostrar chave"><i class="bi bi-eye"></i></button><button class="btn btn-light" data-copyval="#wtok"><i class="bi bi-clipboard"></i> Copiar</button></div>
+            <div class="input-group"><input class="form-control" id="wtok" type="password" readonly value="${H.esc(i.webhookToken)}"><button class="btn btn-light" id="show">Mostrar</button><button class="btn btn-light" data-copyval="#wtok">Copiar</button></div>
             <div class="form-text">Na ferramenta, envie a chave no cabeçalho <span class="kw">x-webhook-token</span>.</div></div>
         </div>
         <p class="small mt-4 mb-2"><strong>Campos que o sistema entende</strong> (use estes nomes na ferramenta):</p>

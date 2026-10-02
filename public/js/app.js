@@ -1,42 +1,42 @@
 /* Holding Money — inicialização, autenticação, navegação e rotas */
 const NAV = [
   { title: 'Comando', items: [
-    ['#/', 'speedometer2', 'Painel'],
-    ['#/agentes', 'cpu', 'Agentes'],
+    ['#/', 'Painel'],
+    ['#/agentes', 'Agentes'],
   ] },
   { title: 'Comercial', items: [
-    ['#/leads', 'people', 'Leads', 'follow'],
-    ['#/e/propostas', 'file-earmark-text', 'Propostas'],
-    ['#/e/ofertas', 'megaphone', 'Ofertas'],
-    ['#/e/produtos', 'box-seam', 'Produtos'],
-    ['#/e/negocios', 'briefcase', 'Negócios'],
+    ['#/leads', 'Leads', 'follow'],
+    ['#/e/propostas', 'Propostas'],
+    ['#/e/ofertas', 'Ofertas'],
+    ['#/e/produtos', 'Produtos'],
+    ['#/e/negocios', 'Negócios'],
   ] },
   { title: 'Marketing', items: [
-    ['#/e/conteudos', 'camera-reels', 'Conteúdos'],
-    ['#/e/campanhas', 'bullseye', 'Campanhas'],
-    ['#/e/scripts', 'chat-left-quote', 'Scripts comerciais'],
+    ['#/e/conteudos', 'Conteúdos'],
+    ['#/e/campanhas', 'Campanhas'],
+    ['#/e/scripts', 'Scripts comerciais'],
   ] },
   { title: 'Financeiro', items: [
-    ['#/e/financeiro', 'cash-coin', 'Lançamentos'],
+    ['#/e/financeiro', 'Lançamentos'],
   ] },
   { title: 'Execução', items: [
-    ['#/e/tarefas', 'check2-square', 'Tarefas'],
-    ['#/checklist', 'list-check', 'Checklist diário'],
-    ['#/relatorios', 'journal-text', 'Relatório semanal'],
-    ['#/aprovacoes', 'shield-check', 'Aprovações', 'aprovacoes'],
+    ['#/e/tarefas', 'Tarefas'],
+    ['#/checklist', 'Checklist diário'],
+    ['#/relatorios', 'Relatório semanal'],
+    ['#/aprovacoes', 'Aprovações', 'aprovacoes'],
   ] },
   { title: 'Sistema', items: [
-    ['#/e/riscos', 'cone-striped', 'Riscos'],
-    ['#/onboarding', 'building', 'Contexto da empresa'],
-    ['#/identidade', 'fingerprint', 'Identidade e doutrina'],
-    ['#/ia', 'stars', 'Inteligência artificial'],
+    ['#/e/riscos', 'Riscos'],
+    ['#/onboarding', 'Contexto da empresa'],
+    ['#/identidade', 'Identidade e doutrina'],
+    ['#/ia', 'Inteligência artificial'],
   ] },
 ];
 
 // Configurações ficam fora do menu principal (botão no rodapé da barra lateral)
 const AJUSTES = [
-  ['formularios', 'plug', 'Formulários e conexões', 'admin'],
-  ['usuarios', 'person-lock', 'Usuários e conta', ''],
+  ['formularios', 'Formulários e conexões', 'admin'],
+  ['usuarios', 'Usuários e conta', ''],
 ];
 
 const App = {
@@ -232,15 +232,15 @@ const App = {
           <div class="brand"><a href="#/" class="brand-name">Holding Money</a></div>
           ${H.stripes({ width: 256, height: 40 })}
           <nav>${NAV.map((g) => `<div class="nav-group"><div class="nav-group-title">${H.esc(g.title)}</div>
-            ${g.items.filter((i) => i[0] !== '#/ia' || App.iaDisp).map(([href, icon, label, badge]) => `<a class="side-link" href="${href}"><i class="bi bi-${icon}"></i><span>${H.esc(label)}</span>${badge ? `<span class="badge rounded-pill d-none" data-badge="${badge}"></span>` : ''}</a>`).join('')}
+            ${g.items.filter((i) => i[0] !== '#/ia' || App.iaDisp).map(([href, label, badge]) => `<a class="side-link" href="${href}"><span>${H.esc(label)}</span>${badge ? `<span class="badge rounded-pill d-none" data-badge="${badge}"></span>` : ''}</a>`).join('')}
           </div>`).join('')}</nav>
           <div class="side-footer d-flex justify-content-between align-items-center">
             <div><strong>${H.esc(App.user.nome)}</strong><div class="text-muted" style="font-size:.75rem">${App.user.papel === 'admin' ? 'Fundador' : 'Operador'}</div></div>
-            <div class="d-flex gap-1"><a class="btn btn-sm btn-light side-cfg" href="#/ajustes" title="Configurações" aria-label="Configurações"><i class="bi bi-gear"></i></a><button class="btn btn-sm btn-light" id="logout">Sair</button></div>
+            <div class="d-flex gap-1"><a class="btn btn-sm btn-light side-cfg" href="#/ajustes">Configurações</a><button class="btn btn-sm btn-light" id="logout">Sair</button></div>
           </div>
         </aside>
         <div class="main">
-          <div class="topbar"><button class="btn btn-light" id="menu" aria-label="Abrir menu"><i class="bi bi-list"></i></button><span class="brand-name">Holding Money</span><span style="width:40px"></span></div>
+          <div class="topbar"><button class="btn btn-light" id="menu">Menu</button><span class="brand-name">Holding Money</span><span style="width:40px"></span></div>
           <main class="content" id="content"></main>
         </div>
       </div>`;

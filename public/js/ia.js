@@ -13,7 +13,7 @@ const IA = {
   bannerSemIA(texto) {
     if (!App.iaDisp || App.ia) return '';
     const admin = App.user.papel === 'admin';
-    return `<div class="ia-off mb-3"><i class="bi bi-stars"></i><div class="flex-grow-1">${H.esc(texto)}${admin ? '' : ' Peça ao fundador para ativar a IA.'}</div>
+    return `<div class="ia-off mb-3"><div class="flex-grow-1">${H.esc(texto)}${admin ? '' : ' Peça ao fundador para ativar a IA.'}</div>
       ${admin ? '<button class="btn btn-sm btn-primary" data-ligar-ia>Ativar IA</button>' : ''}</div>`;
   },
 
@@ -69,7 +69,7 @@ const IA = {
     el.className = 'modal fade';
     el.tabIndex = -1;
     el.innerHTML = `<div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
-      <div class="modal-header"><h2 class="modal-title"><i class="bi bi-stars text-gold"></i> Sugerir ${H.esc(def.label.toLowerCase())} com IA</h2>
+      <div class="modal-header"><h2 class="modal-title">Sugerir ${H.esc(def.label.toLowerCase())} com IA</h2>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
       <div class="modal-body">
         <form id="iaf" class="row g-3">
@@ -78,7 +78,7 @@ const IA = {
             <div class="form-text">A IA usa o contexto da sua empresa e os dados já cadastrados. Nada é salvo sem sua confirmação.</div></div>
           <div class="col-sm-4"><label class="form-label" for="ia_qtd">Quantidade</label>
             <select class="form-select" id="ia_qtd">${[1, 2, 3, 4, 5].map((n) => `<option ${n === 3 ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
-          <div class="col-sm-8 d-flex align-items-end"><button class="btn btn-primary" type="submit" id="ia_go"><i class="bi bi-stars"></i> Gerar sugestões</button></div>
+          <div class="col-sm-8 d-flex align-items-end"><button class="btn btn-primary" type="submit" id="ia_go">Gerar sugestões</button></div>
         </form>
         <div id="ia_out" class="mt-4"></div>
       </div>
@@ -98,7 +98,7 @@ const IA = {
         coletar = IA.preview(out, { [entity]: r.itens });
         el.querySelector('#ia_ok').classList.toggle('d-none', !r.itens.length);
       } catch (err) { out.innerHTML = `<p class="text-danger">${H.esc(err.message)}</p>`; }
-      btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Gerar outras';
+      btn.disabled = false; btn.textContent = 'Gerar outras';
     });
     el.querySelector('#ia_ok').addEventListener('click', async (e) => {
       const itens = coletar ? coletar() : {};
@@ -212,9 +212,9 @@ const IA = {
         <form id="ctx" novalidate><div id="qs"></div>
           <p class="text-danger small mb-0" id="qerr" role="alert"></p>
           <div class="d-flex flex-wrap gap-2 mt-4 pt-3 border-top align-items-center">
-            <button class="btn btn-light" type="button" id="voltar"><i class="bi bi-arrow-left"></i> Voltar</button>
+            <button class="btn btn-light" type="button" id="voltar">Voltar</button>
             <button class="btn btn-primary" type="submit" id="seguir"></button>
-            ${primeiro ? '<button class="btn btn-link ms-auto" type="button" id="skip">Prefiro cadastrar tudo sozinho</button>' : '<button class="btn btn-link ms-auto" type="button" id="salvarJa">Salvar alterações</button><a class="btn btn-light" href="#/onboarding?passo=estrutura"><i class="bi bi-stars text-gold"></i> Propor estrutura</a>'}
+            ${primeiro ? '<button class="btn btn-link ms-auto" type="button" id="skip">Prefiro cadastrar tudo sozinho</button>' : '<button class="btn btn-link ms-auto" type="button" id="salvarJa">Salvar alterações</button><a class="btn btn-light" href="#/onboarding?passo=estrutura">Propor estrutura</a>'}
           </div>
         </form>
       </div>`;
@@ -234,7 +234,7 @@ const IA = {
       qs.innerHTML = `<h2 class="onb-title">${H.esc(g.titulo)} <span class="text-muted">${etapa + 1} de ${grupos.length}</span></h2>${g.campos.filter((f) => C.visivel(f, v)).map((f) => C.campo(f, v)).join('')}`;
       root.querySelector('#voltar').classList.toggle('d-none', etapa === 0);
       const ultima = etapa === grupos.length - 1;
-      root.querySelector('#seguir').innerHTML = ultima ? (primeiro ? 'Salvar e montar estrutura <i class="bi bi-arrow-right"></i>' : 'Salvar') : 'Continuar <i class="bi bi-arrow-right"></i>';
+      root.querySelector('#seguir').textContent = ultima ? (primeiro ? 'Salvar e montar estrutura' : 'Salvar') : 'Continuar';
       err.textContent = '';
       if (focar) qs.querySelector('input:not(.btn-check), textarea, .btn-check')?.focus();
     };
@@ -314,12 +314,12 @@ const IA = {
         <div class="page-head"><div><h1>Como quer montar sua estrutura?</h1><p>Com o contexto que você contou, dá para começar de dois jeitos.</p></div></div>
         <div class="row g-3" style="max-width:960px">
           <div class="col-md-6"><div class="panel choice">
-            <span class="ia-pill on mb-2"><i class="bi bi-stars"></i> Recomendado</span>
+            <span class="ia-pill on mb-2">Recomendado</span>
             <h2 class="h5">Com IA</h2>
             <p class="text-muted">A IA analisa seu negócio e propõe negócios, produtos, ofertas, mensagens de venda, um plano de ação para as próximas semanas e os riscos a observar.</p>
-            <button class="btn btn-primary" id="comia"><i class="bi bi-stars"></i> Usar IA e continuar</button></div></div>
+            <button class="btn btn-primary" id="comia">Usar IA e continuar</button></div></div>
           <div class="col-md-6"><div class="panel choice">
-            <span class="ia-pill mb-2"><i class="bi bi-lightning"></i> Mais rápido</span>
+            <span class="ia-pill mb-2">Mais rápido</span>
             <h2 class="h5">Estrutura básica</h2>
             <p class="text-muted">Criamos seu negócio, os produtos que você citou e um plano de primeiros passos. O resto você completa quando quiser, e pode ativar a IA depois.</p>
             <button class="btn btn-light" id="basica">Montar estrutura básica</button></div></div>
@@ -344,8 +344,8 @@ const IA = {
       ${r.resumo ? `<div class="ia-resumo mb-4"><div class="hero-label">Leitura do negócio</div><div>${H.md(r.resumo)}</div></div>` : ''}
       <div id="prev"></div>
       <div class="d-flex flex-wrap gap-2 mt-4 pt-3 border-top">
-        <button class="btn btn-primary" id="ok"><i class="bi bi-check2"></i> Criar selecionados</button>
-        ${r.fonte === 'ia' ? '<button class="btn btn-light" id="regen"><i class="bi bi-arrow-repeat"></i> Gerar outra proposta</button>' : ''}
+        <button class="btn btn-primary" id="ok">Criar selecionados</button>
+        ${r.fonte === 'ia' ? '<button class="btn btn-light" id="regen">Gerar outra proposta</button>' : ''}
         <a class="btn btn-link" href="#/onboarding">Ajustar contexto</a>
         ${primeiro ? '<button class="btn btn-link ms-auto" id="skip">Não criar nada agora</button>' : ''}
       </div>`;

@@ -281,13 +281,9 @@ pre.code { background: var(--hm-mist); border-radius: 8px; padding: .8rem 1rem; 
 .ia-pill { display: inline-flex; align-items: center; gap: .35rem; font-family: 'Montserrat', sans-serif; font-size: .75rem; font-weight: 700; padding: .3rem .7rem; border-radius: 999px; background: var(--hm-mist); color: var(--hm-muted); white-space: nowrap; }
 .ia-pill.on { background: #fbf3e0; color: var(--hm-gold-dark); }
 .ia-off { display: flex; align-items: center; gap: .85rem; padding: .85rem 1rem; border-radius: 10px; background: #fbf8f0; border: 1px solid #efe2bf; font-size: .9rem; }
-.ia-off > .bi { color: var(--hm-gold); font-size: 1.2rem; }
 .panel.choice { display: flex; flex-direction: column; align-items: flex-start; }
 .panel.choice .btn { margin-top: auto; }
 details.adv > summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; flex-wrap: wrap; }
-details.adv > summary::-webkit-details-marker { display: none; }
-details.adv > summary::after { content: '\F282'; font-family: 'bootstrap-icons'; font-size: .8rem; transition: transform .2s; }
-details.adv[open] > summary::after { transform: rotate(180deg); }
 .btn-outline-dark:hover, .btn-check:checked + .btn-outline-dark { background: var(--hm-navy); border-color: var(--hm-navy); color: #fff; }
 .panel.choice h2 { font-family: "Montserrat", sans-serif; font-weight: 700; }
 .ia-off .btn { white-space: nowrap; flex-shrink: 0; }

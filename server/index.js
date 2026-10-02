@@ -110,7 +110,6 @@ const nm = path.join(__dirname, '..', 'node_modules');
 const vendor = { maxAge: '7d' };
 // Bibliotecas servidas localmente (sem depender de CDN)
 app.use('/vendor/bootstrap', express.static(path.join(nm, 'bootstrap', 'dist'), vendor));
-app.use('/vendor/bootstrap-icons', express.static(path.join(nm, 'bootstrap-icons', 'font'), vendor));
 app.use('/vendor/chart.js', express.static(path.join(nm, 'chart.js', 'dist'), vendor));
 app.use('/vendor/fonts/montserrat', express.static(path.join(nm, '@fontsource', 'montserrat'), vendor));
 app.use('/vendor/fonts/inter', express.static(path.join(nm, '@fontsource', 'inter'), vendor));
