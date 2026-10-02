@@ -96,13 +96,16 @@ function counter(from) {
  *   ${__contaId}    -> $N (valor injetado na posição correta)
  */
 function bindSql(sql, args, injetarContaId) {
-  const values = [];
-  const next = counter(0);
+  const values = injetarContaId
+    ? [currentContaId()]
+    : [];
+  const next = counter(values.length);
+  let argIndex = 0;
 
   const text = String(sql)
     .replace(/\?/g, () => {
       const i = next();
-      values[i - 1] = normalizarValor(args[i - 1]);
+      values[i - 1] = normalizarValor(args[argIndex++]);
       return `$${i}`;
     })
     .replace(/\$\{__contaId\}/g, () => {
@@ -110,10 +113,6 @@ function bindSql(sql, args, injetarContaId) {
       values[i - 1] = currentContaId();
       return `$${i}`;
     });
-
-  if (injetarContaId) {
-    values.unshift(currentContaId());
-  }
 
   return { text, values };
 }
