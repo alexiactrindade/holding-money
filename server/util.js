@@ -34,14 +34,17 @@ function brl(v) {
 }
 
 async function logAction(db, usuario, acao, entidade, id, detalhes) {
+  const { contaAtual } = require('./db-pg');
+
   await db
     .prepare(`
       INSERT INTO historico
-        (usuario, acao, entidade, registro_id, detalhes)
+        (conta_id, usuario, acao, entidade, registro_id, detalhes)
       VALUES
-        (?, ?, ?, ?, ?)
+        (?, ?, ?, ?, ?, ?)
     `)
     .run(
+      contaAtual(),
       usuario,
       acao,
       entidade,

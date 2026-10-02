@@ -4,7 +4,13 @@ const { DatabaseSync } = require('node:sqlite');
 const { entities, systemTables } = require('./schema');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
-fs.mkdirSync(DATA_DIR, { recursive: true });
+try {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+} catch (e) {
+  // Ambiente somente leitura (ex.: Vercel). O app roda em PostgreSQL (db-pg.js);
+  // este módulo SQLite é apenas legado e não deve derrubar o servidor.
+  console.warn('SQLite (legado) indisponível:', e.message);
+}
 
 // SQLite embutido no Node (node:sqlite) — sem compilação nativa, funciona em Windows/Mac/Linux.
 //

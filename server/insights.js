@@ -1,5 +1,5 @@
 const express = require('express');
-const { db } = require('./db-pg');
+const { db, contaAtual } = require('./db-pg');
 const { ESTAGIOS_LEAD } = require('./schema');
 const { isoDate, addDays, daysBetween, brl } = require('./util');
 
@@ -1188,9 +1188,7 @@ router.put(
             (conta_id, data, respostas)
           VALUES
             (
-              (SELECT current_setting(
-                'app.conta_id'
-              )::BIGINT),
+              ?,
               ?,
               ?
             )
@@ -1200,6 +1198,7 @@ router.put(
             updated_at = NOW()
         `)
         .run(
+          contaAtual(),
           data,
           JSON.stringify(clean)
         );
@@ -1549,9 +1548,7 @@ router.post(
             )
           VALUES
             (
-              (SELECT current_setting(
-                'app.conta_id'
-              )::BIGINT),
+              ?,
               ?,
               ?,
               ?
@@ -1559,6 +1556,7 @@ router.post(
           RETURNING id
         `)
         .run(
+          contaAtual(),
           ini,
           fim,
           JSON.stringify(secoes)
@@ -1668,9 +1666,7 @@ router.put(
           )
         VALUES
           (
-            (SELECT current_setting(
-              'app.conta_id'
-            )::BIGINT),
+            ?,
             ?,
             ?
           )
@@ -1682,6 +1678,7 @@ router.put(
       for (const k of permitidas) {
         if (k in (req.body || {})) {
           await stmt.run(
+            contaAtual(),
             `identidade.${k}`,
             String(
               req.body[k]

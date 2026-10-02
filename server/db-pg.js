@@ -13,6 +13,199 @@ const pool = new Pool({
   connectionTimeoutMillis: 10000,
 });
 
+/*
+ * Tabelas que pertencem a uma conta (empresa).
+ * As tabelas de dicionário NÃO entram aqui; as de sistema (contas,
+ * usuarios) ficam de fora porque são acessadas via `sistema`.
+ */
+const TENANT_TABLES = new Set([
+  ...Object.keys(entities),
+  'configuracoes',
+  'checklists',
+  'relatorios',
+  'core_mensagens',
+  'historico',
+]);
+
+const TENANT_TABLES_SQL = [...TENANT_TABLES].join('|');
+
+/*
+ * SQLite -> PostgreSQL para as expressões de data usadas nas queries.
+ */
+function translateSql(sql) {
+  return String(sql)
+    .replace(/datetime\('now',\s*'localtime'\)/gi, 'NOW()')
+    .replace(/date\('now',\s*'localtime'\)/gi, 'CURRENT_DATE');
+}
+
+/*
+ * Isolamento por conta aplicado automaticamente nas queries.
+ *
+ * Como as tabelas de negócio são compartilhadas no PostgreSQL, toda
+ * consulta feita pelo `db` dentro do contexto de uma conta recebe o
+ * filtro conta_id (e os INSERTs recebem o conta_id automaticamente).
+ * Assim cada empresa enxerga apenas os próprios dados.
+ */
+function scopeSql(sql) {
+  if (!currentContaId()) return sql;
+
+  let out = translateSql(sql);
+  const tabelas = out.match(
+    new RegExp(`\\b(?:FROM|JOIN|UPDATE|INTO)\\s+(${TENANT_TABLES_SQL})\\b`, 'gi')
+  );
+
+  if (!tabelas || !/\b(SELECT|UPDATE|DELETE)\b/i.test(out)) {
+    return out;
+  }
+
+  if (/UPDATE|DELETE/i.test(out)) {
+    if (/\bWHERE\b/i.test(out) && !/\bconta_id\s*=/i.test(out)) {
+      out = out.replace(/\bWHERE\b/i, 'WHERE conta_id = ${__contaId} AND');
+    }
+    return out;
+  }
+
+  // SELECT: adiciona/estende o WHERE com o filtro de conta.
+  if (/\bWHERE\b/i.test(out)) {
+    if (!/\bconta_id\s*=/i.test(out)) {
+      out = out.replace(/\bWHERE\b/i, 'WHERE conta_id = ${__contaId} AND');
+    }
+  } else {
+    const ordem = out.search(
+      /\b(ORDER\s+BY|LIMIT|GROUP\s+BY|HAVING|OFFSET)\b/i
+    );
+    if (ordem !== -1) {
+      out = out.slice(0, ordem) + `WHERE conta_id = \${__contaId} ` + out.slice(ordem);
+    } else {
+      out = out.replace(/;?\s*$/, '') + ` WHERE conta_id = \${__contaId}`;
+    }
+  }
+
+  return out;
+}
+
+function counter(from) {
+  let n = from || 0;
+  return () => ++n;
+}
+
+/*
+ * Converte placeholders:
+ *
+ *   ?               -> $1, $2, ...
+ *   ${__contaId}    -> $N (valor injetado na posição correta)
+ */
+function bindSql(sql, args, injetarContaId) {
+  const values = [];
+  const next = counter(0);
+
+  const text = String(sql)
+    .replace(/\?/g, () => {
+      const i = next();
+      values[i - 1] = normalizarValor(args[i - 1]);
+      return `$${i}`;
+    })
+    .replace(/\$\{__contaId\}/g, () => {
+      const i = next();
+      values[i - 1] = currentContaId();
+      return `$${i}`;
+    });
+
+  if (injetarContaId) {
+    values.unshift(currentContaId());
+  }
+
+  return { text, values };
+}
+
+/*
+ * Insere o conta_id nas colunas de um INSERT destinado a uma tabela
+ * de negócio. Detecta automaticamente a lista de colunas.
+ */
+function injectContaId(text) {
+  const alvo = text.match(
+    new RegExp(`INSERT\\s+INTO\\s+(${TENANT_TABLES_SQL})\\b`, 'i')
+  );
+  if (!alvo) return null;
+
+  const colunas = text.match(
+    new RegExp(
+      `INSERT\\s+INTO\\s+${alvo[1]}\\s*\\(([^)]*)\\)`,
+      'i'
+    )
+  );
+
+  if (colunas) {
+    if (/\bconta_id\b/i.test(colunas[1])) return null; // já inclui conta_id
+    const inicio = colunas.index + colunas[0].indexOf('(') + 1;
+    const fim = colunas.index + colunas[0].lastIndexOf(')');
+    return text.slice(0, inicio) + 'conta_id, ' + text.slice(inicio, fim) + ', $1' + text.slice(fim);
+  }
+
+  // INSERT sem lista de colunas (ex.: INSERT INTO tabela VALUES ...)
+  const idx = text.toUpperCase().indexOf('VALUES');
+  if (idx === -1) return null;
+  const abre = text.lastIndexOf(')', idx);
+  if (abre === -1) return null;
+  return text.slice(0, abre + 1) + ' conta_id,' + text.slice(abre + 1);
+}
+
+function normalizarValor(value) {
+  if (value === undefined) return null;
+  return value;
+}
+
+function plain(row) {
+  return row || null;
+}
+
+function preparar(client, sql) {
+  let text = translateSql(sql);
+  let injetarContaId = false;
+
+  if (currentContaId() && /^\s*INSERT\b/i.test(text)) {
+    const comConta = injectContaId(text);
+    if (comConta) {
+      text = comConta;
+      injetarContaId = true;
+    }
+  }
+
+  const scoped = scopeSql(text);
+
+  return {
+    async run(...args) {
+      const { text: t, values } = bindSql(scoped, args, injetarContaId);
+      const result = await client.query(t, values);
+
+      let lastInsertRowid = null;
+
+      if (result.rows?.[0]?.id != null) {
+        lastInsertRowid = Number(result.rows[0].id);
+      }
+
+      return {
+        changes: result.rowCount || 0,
+        lastInsertRowid,
+      };
+    },
+
+    async get(...args) {
+      const { text: t, values } = bindSql(scoped, args, injetarContaId);
+      const result = await client.query(t, values);
+
+      return plain(result.rows[0]);
+    },
+
+    async all(...args) {
+      const { text: t, values } = bindSql(scoped, args, injetarContaId);
+      const result = await client.query(t, values);
+
+      return result.rows;
+    },
+  };
+}
+
 const als = new AsyncLocalStorage();
 
 function currentStore() {
@@ -35,68 +228,6 @@ function assertConta() {
   }
 
   return contaId;
-}
-
-/**
- * Converte placeholders SQLite:
- *
- *   WHERE id = ?
- *   AND nome = ?
- *
- * para PostgreSQL:
- *
- *   WHERE id = $1
- *   AND nome = $2
- */
-function pgSql(sql) {
-  let index = 0;
-
-  return String(sql).replace(/\?/g, () => `$${++index}`);
-}
-
-function normalizarValor(value) {
-  if (value === undefined) return null;
-  return value;
-}
-
-function plain(row) {
-  return row || null;
-}
-
-function preparar(client, sql) {
-  const text = pgSql(sql);
-
-  return {
-    async run(...args) {
-      const values = args.map(normalizarValor);
-      const result = await client.query(text, values);
-
-      let lastInsertRowid = null;
-
-      if (result.rows?.[0]?.id != null) {
-        lastInsertRowid = Number(result.rows[0].id);
-      }
-
-      return {
-        changes: result.rowCount || 0,
-        lastInsertRowid,
-      };
-    },
-
-    async get(...args) {
-      const values = args.map(normalizarValor);
-      const result = await client.query(text, values);
-
-      return plain(result.rows[0]);
-    },
-
-    async all(...args) {
-      const values = args.map(normalizarValor);
-      const result = await client.query(text, values);
-
-      return result.rows;
-    },
-  };
 }
 
 const db = {
@@ -166,11 +297,11 @@ const db = {
  */
 const sistema = {
   exec: async (sql) => {
-    return pool.query(sql);
+    return currentClient().query(sql);
   },
 
   prepare: (sql) => {
-    return preparar(pool, sql);
+    return preparar(currentClient(), sql);
   },
 
   transaction: (fn) => {
@@ -205,7 +336,6 @@ const sistema = {
     };
   },
 };
-
 /*
  * Tabelas globais do sistema.
  */
@@ -400,6 +530,12 @@ async function migrate() {
 }
 
 /*
+ * Contas cuja estrutura já foi preparada neste processo.
+ * Evita rodar toda a DDL (migrateTenant + seed) a cada requisição.
+ */
+const contasPreparadas = new Set();
+
+/*
  * Garante que a estrutura da conta exista.
  */
 async function prepararConta(contaId) {
@@ -409,9 +545,15 @@ async function prepararConta(contaId) {
     throw new Error('Conta inválida');
   }
 
+  if (contasPreparadas.has(id)) {
+    return true;
+  }
+
   return comConta(id, async () => {
     await migrateTenant();
     await seed();
+
+    contasPreparadas.add(id);
 
     return true;
   });

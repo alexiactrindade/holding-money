@@ -4,7 +4,7 @@
 
 const express = require('express');
 
-const { db, insert } = require('./db-pg');
+const { db, insert, contaAtual } = require('./db-pg');
 const { entities } = require('./schema');
 const { sanitize, dynamicOptions } = require('./crud');
 const { getConfig, snapshot } = require('./insights');
@@ -63,14 +63,14 @@ async function setCfg(k, v) {
         (conta_id, chave, valor)
       VALUES
         (
-          (SELECT current_setting('app.conta_id')::BIGINT),
+          ?,
           ?,
           ?
         )
       ON CONFLICT (conta_id, chave)
       DO UPDATE SET valor = EXCLUDED.valor
     `)
-    .run(k, String(v));
+    .run(contaAtual(), k, String(v));
 }
 
 async function cfgVal(k) {

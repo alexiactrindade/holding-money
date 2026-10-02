@@ -89,50 +89,141 @@ const App = {
   },
 
   // Tela de acesso: "entrar" ou "cadastro" (cada cadastro cria uma nova conta/empresa)
-  renderAuth(modo = 'entrar') {
-    const cad = modo === 'cadastro';
-    document.getElementById('root').innerHTML = `
-      <div class="auth">
-        <div class="auth-form">
-          <form id="fa" novalidate>
-            <h1 class="auth-title">${cad ? 'Crie sua conta' : 'Entre no sistema'}</h1>
-            ${cad ? '<label class="form-label" for="an">Seu nome</label><input class="form-control mb-3" id="an" name="nome" autocomplete="name" required>' : ''}
-            <label class="form-label" for="ae">E-mail</label><input class="form-control mb-3" id="ae" name="email" type="email" autocomplete="email" required>
-            <label class="form-label" for="as">Senha</label><input class="form-control" id="as" name="senha" type="password" autocomplete="${cad ? 'new-password' : 'current-password'}" ${cad ? 'minlength="8" aria-describedby="sh"' : ''} required>
-            ${cad ? '<div class="form-text" id="sh">Mínimo de 8 caracteres.</div>' : ''}
-            <button class="btn btn-primary w-100 py-2 mt-4" type="submit">${cad ? 'Criar conta' : 'Entrar'}</button>
-            <p class="text-danger small mt-3 mb-0" id="err" role="alert"></p>
-            ${cad
+ renderAuth(modo = 'entrar') {
+  const cad = modo === 'cadastro';
+
+  document.getElementById('root').innerHTML = `
+    <div class="auth">
+      <div class="auth-form">
+        <form id="fa" novalidate>
+          <h1 class="auth-title">${cad ? 'Crie sua conta' : 'Entre no sistema'}</h1>
+
+          ${cad ? `
+            <label class="form-label" for="ae_empresa">Empresa</label>
+            <input
+              class="form-control mb-3"
+              id="ae_empresa"
+              name="empresa"
+              autocomplete="organization"
+              required
+            >
+
+            <label class="form-label" for="an">Seu nome</label>
+            <input
+              class="form-control mb-3"
+              id="an"
+              name="nome"
+              autocomplete="name"
+              required
+            >
+          ` : ''}
+
+          <label class="form-label" for="ae">E-mail</label>
+          <input
+            class="form-control mb-3"
+            id="ae"
+            name="email"
+            type="email"
+            autocomplete="email"
+            required
+          >
+
+          <label class="form-label" for="as">Senha</label>
+          <input
+            class="form-control"
+            id="as"
+            name="senha"
+            type="password"
+            autocomplete="${cad ? 'new-password' : 'current-password'}"
+            ${cad ? 'minlength="8" aria-describedby="sh"' : ''}
+            required
+          >
+
+          ${cad ? '<div class="form-text" id="sh">Mínimo de 8 caracteres.</div>' : ''}
+
+          <button
+            class="btn btn-primary w-100 py-2 mt-4"
+            type="submit"
+          >
+            ${cad ? 'Criar conta' : 'Entrar'}
+          </button>
+
+          <p class="text-danger small mt-3 mb-0" id="err" role="alert"></p>
+
+          ${
+            cad
               ? '<p class="text-center mt-3 mb-0">Já tem uma conta? <a href="#" id="troca">Entrar</a></p>'
-              : '<div class="auth-ou"><span>ou</span></div><button class="btn btn-outline-dark w-100 py-2" type="button" id="troca">Criar conta</button>'}
-          </form>
-        </div>
-        <div class="auth-art" aria-hidden="true">
-          <div class="art-top">
-            <div class="art-copy"><h2>Holding App</h2>
-              <p>Estruture, opere, venda, monetize e escale múltiplas linhas de negócio com um único sistema.</p></div>
+              : '<div class="auth-ou"><span>ou</span></div><button class="btn btn-outline-dark w-100 py-2" type="button" id="troca">Criar conta</button>'
+          }
+        </form>
+      </div>
+
+      <div class="auth-art" aria-hidden="true">
+        <div class="art-top">
+          <div class="art-copy">
+            <h2>Holding App</h2>
+            <p>
+              Estruture, opere, venda, monetize e escale múltiplas linhas
+              de negócio com um único sistema.
+            </p>
           </div>
-          ${H.stripes({ width: 600, height: 240, className: '' })}
         </div>
-      </div>`;
-    document.getElementById('troca').addEventListener('click', (e) => { e.preventDefault(); App.renderAuth(cad ? 'entrar' : 'cadastro'); });
-    document.getElementById(cad ? 'an' : 'ae').focus();
-    document.getElementById('fa').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const body = Object.fromEntries(new FormData(e.target));
-      const err = document.getElementById('err');
-      if (cad && !String(body.nome || '').trim()) { err.textContent = 'Digite seu nome.'; return; }
-      if (!body.email || !body.senha) { err.textContent = 'Preencha e-mail e senha.'; return; }
-      if (cad && body.senha.length < 8) { err.textContent = 'A senha precisa ter pelo menos 8 caracteres.'; return; }
-      const btn = e.target.querySelector('[type=submit]'); btn.disabled = true;
-      try {
-        const { usuario } = await API.post(cad ? '/auth/cadastro' : '/auth/login', body);
-        App.user = usuario;
-        location.hash = '#/';
-        await App.boot();
-      } catch (ex) { err.textContent = ex.message; btn.disabled = false; }
-    });
-  },
+        ${H.stripes({ width: 600, height: 240, className: '' })}
+      </div>
+    </div>
+  `;
+
+  document.getElementById('troca').addEventListener('click', (e) => {
+    e.preventDefault();
+    App.renderAuth(cad ? 'entrar' : 'cadastro');
+  });
+
+  document.getElementById(cad ? 'ae_empresa' : 'ae').focus();
+
+  document.getElementById('fa').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const body = Object.fromEntries(new FormData(e.target));
+    const err = document.getElementById('err');
+
+    if (cad && !String(body.empresa || '').trim()) {
+      err.textContent = 'Digite o nome da empresa.';
+      return;
+    }
+
+    if (cad && !String(body.nome || '').trim()) {
+      err.textContent = 'Digite seu nome.';
+      return;
+    }
+
+    if (!body.email || !body.senha) {
+      err.textContent = 'Preencha e-mail e senha.';
+      return;
+    }
+
+    if (cad && body.senha.length < 8) {
+      err.textContent = 'A senha precisa ter pelo menos 8 caracteres.';
+      return;
+    }
+
+    const btn = e.target.querySelector('[type=submit]');
+    btn.disabled = true;
+
+    try {
+      const { usuario } = await API.post(
+        cad ? '/auth/cadastro' : '/auth/login',
+        body
+      );
+
+      App.user = usuario;
+      location.hash = '#/';
+      await App.boot();
+    } catch (ex) {
+      err.textContent = ex.message;
+      btn.disabled = false;
+    }
+  });
+},
 
   renderShell() {
     document.getElementById('root').innerHTML = `

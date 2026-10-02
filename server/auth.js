@@ -15,16 +15,32 @@ const router = express.Router();
 
 const COOKIE = 'hm_session';
 
+/* =========================================================
+   JWT / SESSÃO
+   ========================================================= */
+
 function loadSecret() {
-  if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
+  if (process.env.JWT_SECRET) {
+    return process.env.JWT_SECRET;
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Configure JWT_SECRET nas variáveis de ambiente de produção.');
+  }
 
   const file = path.join(__dirname, '..', '.jwt_secret');
 
   try {
-    return fs.readFileSync(file, 'utf8').trim();
+    const secret = fs.readFileSync(file, 'utf8').trim();
+
+    if (secret) {
+      return secret;
+    }
   } catch {}
 
-  const secret = require('crypto').randomBytes(48).toString('hex');
+  const secret = require('crypto')
+    .randomBytes(48)
+    .toString('hex');
 
   try {
     fs.writeFileSync(file, secret, { mode: 0o600 });
@@ -62,7 +78,11 @@ function gerarToken(usuario) {
 }
 
 function enviarSessao(res, usuario) {
-  res.cookie(COOKIE, gerarToken(usuario), cookieOptions());
+  res.cookie(
+    COOKIE,
+    gerarToken(usuario),
+    cookieOptions()
+  );
 }
 
 function limparSessao(res) {
@@ -74,9 +94,10 @@ function limparSessao(res) {
   });
 }
 
-/*
- * Autenticação.
- */
+/* =========================================================
+   AUTENTICAÇÃO
+   ========================================================= */
+
 async function requireAuth(req, res, next) {
   const token = req.cookies?.[COOKIE];
 
@@ -87,7 +108,10 @@ async function requireAuth(req, res, next) {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(
+      token,
+      JWT_SECRET
+    );
 
     const usuario = await sistema
       .prepare(`
@@ -100,7 +124,8 @@ async function requireAuth(req, res, next) {
           c.nome AS conta_nome,
           c.slug AS conta_slug
         FROM usuarios u
-        JOIN contas c ON c.id = u.conta_id
+        JOIN contas c
+          ON c.id = u.conta_id
         WHERE u.id = ?
       `)
       .get(payload.id);
@@ -123,8 +148,14 @@ async function requireAuth(req, res, next) {
       conta_slug: usuario.conta_slug,
     };
 
-    next();
+    return next();
+
   } catch (e) {
+    console.error(
+      'ERRO NA AUTENTICAÇÃO:',
+      e
+    );
+
     limparSessao(res);
 
     return res.status(401).json({
@@ -133,9 +164,6 @@ async function requireAuth(req, res, next) {
   }
 }
 
-/*
- * Coloca a requisição dentro do contexto da empresa.
- */
 async function usarConta(req, res, next) {
   if (!req.user?.conta_id) {
     return res.status(401).json({
@@ -144,18 +172,21 @@ async function usarConta(req, res, next) {
   }
 
   try {
-    await comConta(req.user.conta_id, async () => {
-      await prepararConta(req.user.conta_id);
-      await next();
-    });
+    await comConta(
+      req.user.conta_id,
+      async () => {
+        await prepararConta(
+          req.user.conta_id
+        );
+
+        await next();
+      }
+    );
   } catch (e) {
     next(e);
   }
 }
 
-/*
- * Somente administrador.
- */
 function requireAdmin(req, res, next) {
   if (req.user?.papel !== 'admin') {
     return res.status(403).json({
@@ -166,10 +197,11 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-/*
- * Cadastro.
- */
-router.post('/cadastro', async (req, res, next) => {
+/* =========================================================
+   CADASTRO
+   ========================================================= */
+
+router.post('/cadastro', async (req, res) => {
   try {
     const nomeEmpresa = String(
       req.body?.empresa ||
@@ -178,42 +210,46 @@ router.post('/cadastro', async (req, res, next) => {
       ''
     ).trim();
 
-    const nome = String(req.body?.nome || '').trim();
+    const nome = String(
+      req.body?.nome || ''
+    ).trim();
 
-    const email = String(req.body?.email || '')
+    const email = String(
+      req.body?.email || ''
+    )
       .trim()
       .toLowerCase();
 
-    const senha = String(req.body?.senha || '');
+    const senha = String(
+      req.body?.senha || ''
+    );
 
-    if (!nomeEmpresa || !nome || !email || !senha) {
+    if (
+      !nomeEmpresa ||
+      !nome ||
+      !email ||
+      !senha
+    ) {
       return res.status(400).json({
         erro: 'Preencha empresa, nome, e-mail e senha.',
       });
     }
 
-    if (senha.length < 6) {
+    if (senha.length < 8) {
       return res.status(400).json({
-        erro: 'A senha precisa ter pelo menos 6 caracteres.',
+        erro: 'A senha precisa ter pelo menos 8 caracteres.',
       });
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    ) {
       return res.status(400).json({
         erro: 'Informe um e-mail válido.',
       });
     }
 
-    const slugBase = nomeEmpresa
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 50) || 'empresa';
-
-    const hash = await bcrypt.hash(senha, 12);
-
+    /* Verifica e-mail antes de iniciar a transação */
     const existente = await sistema
       .prepare(`
         SELECT id
@@ -228,97 +264,222 @@ router.post('/cadastro', async (req, res, next) => {
       });
     }
 
-    /*
-     * Cria conta + usuário na mesma transação.
-     */
-    const resultado = await sistema.transaction(async () => {
-      let slug = slugBase;
-      let contador = 2;
+    const slugBase =
+      nomeEmpresa
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 50) || 'empresa';
 
-      while (
+    const hash = await bcrypt.hash(
+      senha,
+      12
+    );
+
+    /*
+     * Cria a empresa e o usuário.
+     *
+     * Não usamos RETURNING.
+     * Fazemos INSERT e depois SELECT.
+     */
+    const resultado = await sistema.transaction(
+      async () => {
+        let slug = slugBase;
+        let contador = 2;
+
+        while (
+          await sistema
+            .prepare(`
+              SELECT id
+              FROM contas
+              WHERE slug = ?
+            `)
+            .get(slug)
+        ) {
+          slug = `${slugBase}-${contador++}`;
+        }
+
+        /* -----------------------------------------
+           CRIA CONTA
+           ----------------------------------------- */
+
         await sistema
-          .prepare('SELECT id FROM contas WHERE slug = ?')
-          .get(slug)
-      ) {
-        slug = `${slugBase}-${contador++}`;
+          .prepare(`
+            INSERT INTO contas
+              (nome, slug)
+            VALUES
+              (?, ?)
+          `)
+          .run(
+            nomeEmpresa,
+            slug
+          );
+
+        /* -----------------------------------------
+           RECUPERA CONTA
+           ----------------------------------------- */
+
+        const conta = await sistema
+          .prepare(`
+            SELECT
+              id,
+              nome,
+              slug
+            FROM contas
+            WHERE slug = ?
+          `)
+          .get(slug);
+
+        if (!conta) {
+          throw new Error(
+            'Não foi possível recuperar a conta criada.'
+          );
+        }
+
+        /* -----------------------------------------
+           CRIA USUÁRIO ADMIN
+           ----------------------------------------- */
+
+        await sistema
+          .prepare(`
+            INSERT INTO usuarios
+              (
+                conta_id,
+                nome,
+                email,
+                senha_hash,
+                papel
+              )
+            VALUES
+              (?, ?, ?, ?, 'admin')
+          `)
+          .run(
+            conta.id,
+            nome,
+            email,
+            hash
+          );
+
+        /* -----------------------------------------
+           RECUPERA USUÁRIO
+           ----------------------------------------- */
+
+        const usuario = await sistema
+          .prepare(`
+            SELECT
+              id,
+              conta_id,
+              nome,
+              email,
+              papel
+            FROM usuarios
+            WHERE lower(email) = lower(?)
+          `)
+          .get(email);
+
+        if (!usuario) {
+          throw new Error(
+            'Não foi possível recuperar o usuário criado.'
+          );
+        }
+
+        return {
+          conta,
+          usuario,
+        };
       }
+    )();
 
-      const conta = await sistema
-        .prepare(`
-          INSERT INTO contas (nome, slug)
-          VALUES (?, ?)
-          RETURNING id, nome, slug
-        `)
-        .get(nomeEmpresa, slug);
+    if (!resultado?.conta?.id) {
+      throw new Error(
+        'Conta criada, mas não foi possível recuperar seus dados.'
+      );
+    }
 
-      const usuario = await sistema
-        .prepare(`
-          INSERT INTO usuarios
-            (conta_id, nome, email, senha_hash, papel)
-          VALUES
-            (?, ?, ?, ?, 'admin')
-          RETURNING id, conta_id, nome, email, papel
-        `)
-        .get(
-          conta.id,
-          nome,
-          email,
-          hash
-        );
+    if (!resultado?.usuario?.id) {
+      throw new Error(
+        'Usuário criado, mas não foi possível recuperar seus dados.'
+      );
+    }
 
-      return {
-        conta,
-        usuario,
-      };
-    });
+    /* Prepara as tabelas e configurações da nova conta */
+    await prepararConta(
+      resultado.conta.id
+    );
 
-    /*
-     * Agora criamos as tabelas da empresa e o seed inicial.
-     */
-    await prepararConta(resultado.conta.id);
+    /* Cria a sessão */
+    enviarSessao(
+      res,
+      resultado.usuario
+    );
 
-    enviarSessao(res, resultado.usuario);
-
-    res.status(201).json({
+    return res.status(201).json({
       ok: true,
+
       usuario: {
-        id: Number(resultado.usuario.id),
-        conta_id: Number(resultado.usuario.conta_id),
+        id: Number(
+          resultado.usuario.id
+        ),
+        conta_id: Number(
+          resultado.usuario.conta_id
+        ),
         nome: resultado.usuario.nome,
         email: resultado.usuario.email,
         papel: resultado.usuario.papel,
       },
+
       conta: {
-        id: Number(resultado.conta.id),
+        id: Number(
+          resultado.conta.id
+        ),
         nome: resultado.conta.nome,
         slug: resultado.conta.slug,
       },
     });
+
   } catch (e) {
+    console.error(
+      'ERRO NO CADASTRO:',
+      e
+    );
+
     if (e.code === '23505') {
       return res.status(409).json({
         erro: 'Empresa ou e-mail já cadastrado.',
       });
     }
 
-    next(e);
+    return res.status(500).json({
+      erro:
+        `Erro no cadastro: ${
+          e.message ||
+          'erro desconhecido'
+        }`,
+    });
   }
 });
 
-/*
- * Login.
- */
-router.post('/login', async (req, res, next) => {
+/* =========================================================
+   LOGIN
+   ========================================================= */
+
+router.post('/login', async (req, res) => {
   try {
-    const email = String(req.body?.email || '')
+    const email = String(
+      req.body?.email || ''
+    )
       .trim()
       .toLowerCase();
 
-    const senha = String(req.body?.senha || '');
+    const senha = String(
+      req.body?.senha || ''
+    );
 
     if (!email || !senha) {
       return res.status(400).json({
-        erro: 'Informe e-mail e senha.',
+        erro: 'Preencha e-mail e senha.',
       });
     }
 
@@ -334,37 +495,42 @@ router.post('/login', async (req, res, next) => {
           c.nome AS conta_nome,
           c.slug AS conta_slug
         FROM usuarios u
-        JOIN contas c ON c.id = u.conta_id
+        JOIN contas c
+          ON c.id = u.conta_id
         WHERE lower(u.email) = lower(?)
       `)
       .get(email);
 
     if (!usuario) {
       return res.status(401).json({
-        erro: 'E-mail ou senha incorretos.',
+        erro: 'E-mail ou senha inválidos.',
       });
     }
 
-    const ok = await bcrypt.compare(
-      senha,
-      usuario.senha_hash
+    const senhaOk =
+      await bcrypt.compare(
+        senha,
+        usuario.senha_hash
+      );
+
+    if (!senhaOk) {
+      return res.status(401).json({
+        erro: 'E-mail ou senha inválidos.',
+      });
+    }
+
+    await prepararConta(
+      usuario.conta_id
     );
 
-    if (!ok) {
-      return res.status(401).json({
-        erro: 'E-mail ou senha incorretos.',
-      });
-    }
+    enviarSessao(
+      res,
+      usuario
+    );
 
-    /*
-     * Garante que a estrutura PostgreSQL da conta exista.
-     */
-    await prepararConta(usuario.conta_id);
-
-    enviarSessao(res, usuario);
-
-    res.json({
+    return res.json({
       ok: true,
+
       usuario: {
         id: Number(usuario.id),
         conta_id: Number(usuario.conta_id),
@@ -375,279 +541,83 @@ router.post('/login', async (req, res, next) => {
         conta_slug: usuario.conta_slug,
       },
     });
+
   } catch (e) {
-    next(e);
+    console.error(
+      'ERRO NO LOGIN:',
+      e
+    );
+
+    return res.status(500).json({
+      erro: 'Não foi possível entrar no sistema.',
+    });
   }
 });
 
-/*
- * Logout.
- */
+/* =========================================================
+   LOGOUT
+   ========================================================= */
+
 router.post('/logout', (req, res) => {
   limparSessao(res);
-  res.json({ ok: true });
+
+  return res.json({
+    ok: true,
+  });
 });
 
-/*
- * Usuário atual.
- */
-router.get('/me', requireAuth, async (req, res, next) => {
-  try {
-    const usuario = await sistema
-      .prepare(`
-        SELECT
-          u.id,
-          u.conta_id,
-          u.nome,
-          u.email,
-          u.papel,
-          c.nome AS conta_nome,
-          c.slug AS conta_slug
-        FROM usuarios u
-        JOIN contas c ON c.id = u.conta_id
-        WHERE u.id = ?
-      `)
-      .get(req.user.id);
+/* =========================================================
+   USUÁRIO ATUAL
+   ========================================================= */
 
-    if (!usuario) {
-      return res.status(401).json({
-        erro: 'Usuário não encontrado.',
-      });
-    }
-
-    res.json({
-      usuario: {
-        id: Number(usuario.id),
-        conta_id: Number(usuario.conta_id),
-        nome: usuario.nome,
-        email: usuario.email,
-        papel: usuario.papel,
-        conta_nome: usuario.conta_nome,
-        conta_slug: usuario.conta_slug,
-      },
-    });
-  } catch (e) {
-    next(e);
-  }
-});
-
-/*
- * Alteração de senha.
- */
-router.post('/senha', requireAuth, async (req, res, next) => {
-  try {
-    const atual = String(req.body?.senha_atual || '');
-    const nova = String(req.body?.nova_senha || '');
-
-    if (!atual || !nova) {
-      return res.status(400).json({
-        erro: 'Informe a senha atual e a nova senha.',
-      });
-    }
-
-    if (nova.length < 6) {
-      return res.status(400).json({
-        erro: 'A nova senha precisa ter pelo menos 6 caracteres.',
-      });
-    }
-
-    const usuario = await sistema
-      .prepare(`
-        SELECT senha_hash
-        FROM usuarios
-        WHERE id = ?
-      `)
-      .get(req.user.id);
-
-    if (!usuario) {
-      return res.status(404).json({
-        erro: 'Usuário não encontrado.',
-      });
-    }
-
-    const ok = await bcrypt.compare(
-      atual,
-      usuario.senha_hash
-    );
-
-    if (!ok) {
-      return res.status(400).json({
-        erro: 'Senha atual incorreta.',
-      });
-    }
-
-    const hash = await bcrypt.hash(nova, 12);
-
-    await sistema
-      .prepare(`
-        UPDATE usuarios
-        SET senha_hash = ?
-        WHERE id = ?
-      `)
-      .run(hash, req.user.id);
-
-    limparSessao(res);
-
-    res.json({
-      ok: true,
-      mensagem: 'Senha alterada. Faça login novamente.',
-    });
-  } catch (e) {
-    next(e);
-  }
-});
-
-/*
- * Lista usuários da conta.
- */
 router.get(
-  '/usuarios',
+  '/me',
   requireAuth,
-  requireAdmin,
-  async (req, res, next) => {
+  async (req, res) => {
+    return res.json({
+      usuario: req.user,
+    });
+  }
+);
+
+/* =========================================================
+   ALTERAR SENHA
+   ========================================================= */
+
+router.put(
+  '/senha',
+  requireAuth,
+  async (req, res) => {
     try {
-      const usuarios = await sistema
+      const senhaAtual = String(
+        req.body?.senhaAtual || ''
+      );
+
+      const novaSenha = String(
+        req.body?.novaSenha || ''
+      );
+
+      if (!senhaAtual || !novaSenha) {
+        return res.status(400).json({
+          erro: 'Informe a senha atual e a nova senha.',
+        });
+      }
+
+      if (novaSenha.length < 8) {
+        return res.status(400).json({
+          erro: 'A nova senha precisa ter pelo menos 8 caracteres.',
+        });
+      }
+
+      const usuario = await sistema
         .prepare(`
           SELECT
             id,
-            conta_id,
-            nome,
-            email,
-            papel,
-            created_at
-          FROM usuarios
-          WHERE conta_id = ?
-          ORDER BY id ASC
-        `)
-        .all(req.user.conta_id);
-
-      res.json(
-        usuarios.map((u) => ({
-          ...u,
-          id: Number(u.id),
-          conta_id: Number(u.conta_id),
-        }))
-      );
-    } catch (e) {
-      next(e);
-    }
-  }
-);
-
-/*
- * Cria usuário dentro da conta.
- */
-router.post(
-  '/usuarios',
-  requireAuth,
-  requireAdmin,
-  async (req, res, next) => {
-    try {
-      const nome = String(req.body?.nome || '').trim();
-
-      const email = String(req.body?.email || '')
-        .trim()
-        .toLowerCase();
-
-      const senha = String(req.body?.senha || '');
-
-      const papel =
-        req.body?.papel === 'admin'
-          ? 'admin'
-          : 'operador';
-
-      if (!nome || !email || !senha) {
-        return res.status(400).json({
-          erro: 'Preencha nome, e-mail e senha.',
-        });
-      }
-
-      if (senha.length < 6) {
-        return res.status(400).json({
-          erro: 'A senha precisa ter pelo menos 6 caracteres.',
-        });
-      }
-
-      const existente = await sistema
-        .prepare(`
-          SELECT id
-          FROM usuarios
-          WHERE lower(email) = lower(?)
-        `)
-        .get(email);
-
-      if (existente) {
-        return res.status(409).json({
-          erro: 'Este e-mail já está cadastrado.',
-        });
-      }
-
-      const hash = await bcrypt.hash(senha, 12);
-
-      const usuario = await sistema
-        .prepare(`
-          INSERT INTO usuarios
-            (conta_id, nome, email, senha_hash, papel)
-          VALUES
-            (?, ?, ?, ?, ?)
-          RETURNING id, conta_id, nome, email, papel, created_at
-        `)
-        .get(
-          req.user.conta_id,
-          nome,
-          email,
-          hash,
-          papel
-        );
-
-      res.status(201).json({
-        ...usuario,
-        id: Number(usuario.id),
-        conta_id: Number(usuario.conta_id),
-      });
-    } catch (e) {
-      if (e.code === '23505') {
-        return res.status(409).json({
-          erro: 'Este e-mail já está cadastrado.',
-        });
-      }
-
-      next(e);
-    }
-  }
-);
-
-/*
- * Remove usuário.
- */
-router.delete(
-  '/usuarios/:id',
-  requireAuth,
-  requireAdmin,
-  async (req, res, next) => {
-    try {
-      const id = Number(req.params.id);
-
-      if (!Number.isInteger(id) || id <= 0) {
-        return res.status(400).json({
-          erro: 'Usuário inválido.',
-        });
-      }
-
-      if (id === Number(req.user.id)) {
-        return res.status(400).json({
-          erro: 'Você não pode remover o próprio usuário.',
-        });
-      }
-
-      const usuario = await sistema
-        .prepare(`
-          SELECT id
+            senha_hash
           FROM usuarios
           WHERE id = ?
-            AND conta_id = ?
         `)
-        .get(id, req.user.conta_id);
+        .get(req.user.id);
 
       if (!usuario) {
         return res.status(404).json({
@@ -655,17 +625,313 @@ router.delete(
         });
       }
 
+      const senhaOk =
+        await bcrypt.compare(
+          senhaAtual,
+          usuario.senha_hash
+        );
+
+      if (!senhaOk) {
+        return res.status(400).json({
+          erro: 'A senha atual está incorreta.',
+        });
+      }
+
+      const hash =
+        await bcrypt.hash(
+          novaSenha,
+          12
+        );
+
       await sistema
+        .prepare(`
+          UPDATE usuarios
+          SET senha_hash = ?
+          WHERE id = ?
+        `)
+        .run(
+          hash,
+          req.user.id
+        );
+
+      return res.json({
+        ok: true,
+      });
+
+    } catch (e) {
+      console.error(
+        'ERRO AO ALTERAR SENHA:',
+        e
+      );
+
+      return res.status(500).json({
+        erro: 'Não foi possível alterar a senha.',
+      });
+    }
+  }
+);
+
+/* =========================================================
+   LISTAR USUÁRIOS
+   ========================================================= */
+
+router.get(
+  '/usuarios',
+  requireAuth,
+  async (req, res, next) => {
+    try {
+      const usuarios = await db
+        .prepare(`
+          SELECT
+            id,
+            nome,
+            email,
+            papel
+          FROM usuarios
+          WHERE conta_id = ?
+          ORDER BY nome
+        `)
+        .all(req.user.conta_id);
+
+      return res.json({
+        usuarios: usuarios.map((u) => ({
+          id: Number(u.id),
+          nome: u.nome,
+          email: u.email,
+          papel: u.papel,
+        })),
+      });
+
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
+/* =========================================================
+   CRIAR USUÁRIO
+   ========================================================= */
+
+router.post(
+  '/usuarios',
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const nome = String(
+        req.body?.nome || ''
+      ).trim();
+
+      const email = String(
+        req.body?.email || ''
+      )
+        .trim()
+        .toLowerCase();
+
+      const senha = String(
+        req.body?.senha || ''
+      );
+
+      const papel = String(
+        req.body?.papel || 'operador'
+      ).trim();
+
+      if (!nome || !email || !senha) {
+        return res.status(400).json({
+          erro: 'Preencha nome, e-mail e senha.',
+        });
+      }
+
+      if (senha.length < 8) {
+        return res.status(400).json({
+          erro: 'A senha precisa ter pelo menos 8 caracteres.',
+        });
+      }
+
+      if (
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+      ) {
+        return res.status(400).json({
+          erro: 'Informe um e-mail válido.',
+        });
+      }
+
+      const existente = await db
+        .prepare(`
+          SELECT id
+          FROM usuarios
+          WHERE lower(email) = lower(?)
+            AND conta_id = ?
+        `)
+        .get(
+          email,
+          req.user.conta_id
+        );
+
+      if (existente) {
+        return res.status(409).json({
+          erro: 'Este e-mail já está cadastrado nesta conta.',
+        });
+      }
+
+      const hash =
+        await bcrypt.hash(
+          senha,
+          12
+        );
+
+      await db
+        .prepare(`
+          INSERT INTO usuarios
+            (
+              conta_id,
+              nome,
+              email,
+              senha_hash,
+              papel
+            )
+          VALUES
+            (?, ?, ?, ?, ?)
+        `)
+        .run(
+          req.user.conta_id,
+          nome,
+          email,
+          hash,
+          papel
+        );
+
+      const usuario = await db
+        .prepare(`
+          SELECT
+            id,
+            conta_id,
+            nome,
+            email,
+            papel
+          FROM usuarios
+          WHERE lower(email) = lower(?)
+            AND conta_id = ?
+        `)
+        .get(
+          email,
+          req.user.conta_id
+        );
+
+      if (!usuario) {
+        throw new Error(
+          'Não foi possível recuperar o usuário criado.'
+        );
+      }
+
+      return res.status(201).json({
+        ok: true,
+
+        usuario: {
+          id: Number(usuario.id),
+          conta_id: Number(usuario.conta_id),
+          nome: usuario.nome,
+          email: usuario.email,
+          papel: usuario.papel,
+        },
+      });
+
+    } catch (e) {
+      console.error(
+        'ERRO AO CRIAR USUÁRIO:',
+        e
+      );
+
+      if (e.code === '23505') {
+        return res.status(409).json({
+          erro: 'Este e-mail já está cadastrado.',
+        });
+      }
+
+      return res.status(500).json({
+        erro:
+          `Não foi possível criar o usuário: ${
+            e.message ||
+            'erro desconhecido'
+          }`,
+      });
+    }
+  }
+);
+
+/* =========================================================
+   EXCLUIR USUÁRIO
+   ========================================================= */
+
+router.delete(
+  '/usuarios/:id',
+  requireAuth,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const id = Number(
+        req.params.id
+      );
+
+      if (
+        !Number.isInteger(id) ||
+        id <= 0
+      ) {
+        return res.status(400).json({
+          erro: 'Usuário inválido.',
+        });
+      }
+
+      if (
+        id === Number(req.user.id)
+      ) {
+        return res.status(400).json({
+          erro: 'Você não pode excluir seu próprio usuário.',
+        });
+      }
+
+      const usuario = await db
+        .prepare(`
+          SELECT id
+          FROM usuarios
+          WHERE id = ?
+            AND conta_id = ?
+        `)
+        .get(
+          id,
+          req.user.conta_id
+        );
+
+      if (!usuario) {
+        return res.status(404).json({
+          erro: 'Usuário não encontrado.',
+        });
+      }
+
+      await db
         .prepare(`
           DELETE FROM usuarios
           WHERE id = ?
             AND conta_id = ?
         `)
-        .run(id, req.user.conta_id);
+        .run(
+          id,
+          req.user.conta_id
+        );
 
-      res.json({ ok: true });
+      return res.json({
+        ok: true,
+      });
+
     } catch (e) {
-      next(e);
+      console.error(
+        'ERRO AO EXCLUIR USUÁRIO:',
+        e
+      );
+
+      return res.status(500).json({
+        erro: 'Não foi possível excluir o usuário.',
+      });
     }
   }
 );
@@ -675,4 +941,6 @@ module.exports = {
   requireAuth,
   requireAdmin,
   usarConta,
+  enviarSessao,
+  limparSessao,
 };

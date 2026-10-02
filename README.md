@@ -90,8 +90,8 @@ Se a instalação não tiver chave configurada, o app esconde todos os recursos 
 ## Publicação (deploy)
 
 - Qualquer servidor com Node 22.13+ (VPS, Railway, Render, Fly.io). Use `npm start`.
-- Configure `JWT_SECRET` e `COOKIE_SECURE=true` com HTTPS.
-- Aponte `DATA_DIR` para um volume persistente e faça backup do arquivo `holding-money.db`.
+- Configure `DATABASE_URL` com a conexão do PostgreSQL e `JWT_SECRET` com um valor aleatório longo e estável. No Vercel, cadastre ambos nas variáveis de ambiente dos ambientes Production e Preview usados.
+- A estrutura global do PostgreSQL é verificada automaticamente na primeira chamada à API; as tabelas de cada empresa são preparadas no cadastro e no primeiro acesso.
 - Todos os recursos visuais (Bootstrap, ícones, fontes Montserrat e Inter, Chart.js) são servidos localmente, sem CDN.
 
 ## Estrutura

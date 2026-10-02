@@ -1,6 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
-const { db, insert } = require('./db');
+const { db, insert, contaAtual } = require('./db-pg');
 const { rateLimit, isoDate, addDays } = require('./util');
 
 // Escala usada nas perguntas: 1 (discordo totalmente) a 5 (concordo totalmente)
@@ -252,9 +252,9 @@ const CLASSIFICADORES = { acc: classificarACC, vpa: classificarVPA, 'codigo-inte
 const MARCA = { acc: 'Style-Code', vpa: 'VPA Projetos & Negócios', 'codigo-interno': 'Código Interno Universal' };
 const PRODUTO_ENTRADA = { acc: 'Diagnóstico ACC', vpa: 'Diagnóstico Comercial', 'codigo-interno': 'Teste Código Interno' };
 
-function registrarLead({ slug, nome, contato, empresa, canal, origem, c }) {
-  const produto = db.prepare('SELECT id FROM produtos WHERE nome = ?').get(PRODUTO_ENTRADA[slug]);
-  const existente = contato ? db.prepare('SELECT * FROM leads WHERE contato = ?').get(contato) : null;
+async function registrarLead({ slug, nome, contato, empresa, canal, origem, c }) {
+  const produto = await db.prepare('SELECT id FROM produtos WHERE nome = ?').get(PRODUTO_ENTRADA[slug]);
+  const existente = contato ? await db.prepare('SELECT * FROM leads WHERE contato = ?').get(contato) : null;
   const dados = {
     classificacao: c.perfil, temperatura: c.temperatura, dor: c.dor,
     valor_potencial: c.valor, produto_id: produto?.id || null,
@@ -263,94 +263,113 @@ function registrarLead({ slug, nome, contato, empresa, canal, origem, c }) {
   };
   if (existente) {
     const keys = Object.keys(dados);
-    db.prepare(`UPDATE leads SET ${keys.map((k) => `${k}=?`).join(', ')}, updated_at=datetime('now','localtime') WHERE id=?`).run(...keys.map((k) => dados[k]), existente.id);
+    await db.prepare(`UPDATE leads SET ${keys.map((k) => `${k}=?`).join(', ')}, updated_at=NOW() WHERE id=?`).run(...keys.map((k) => dados[k]), existente.id);
     return existente.id;
   }
   return insert('leads', { nome, contato, empresa: empresa || null, canal, origem, marca: MARCA[slug], estagio: 'Diagnóstico', ...dados });
 }
 
 // Os formulários são modelos do blueprint: ficam desligados até o dono ativar em Integrações
-function ativos() {
-  try { return JSON.parse(db.prepare("SELECT valor FROM configuracoes WHERE chave='diagnosticos.ativos'").get()?.valor || '[]'); } catch { return []; }
+async function ativos() {
+  try {
+    const row = await db.prepare("SELECT valor FROM configuracoes WHERE chave='diagnosticos.ativos'").get();
+    return JSON.parse(row?.valor || '[]');
+  } catch { return []; }
 }
-function setAtivos(lista) {
-  db.prepare('INSERT OR REPLACE INTO configuracoes (chave, valor) VALUES (?, ?)').run('diagnosticos.ativos', JSON.stringify(lista));
+async function setAtivos(lista) {
+  await db.prepare(`
+    INSERT INTO configuracoes (conta_id, chave, valor)
+    VALUES (?, ?, ?)
+    ON CONFLICT (conta_id, chave)
+    DO UPDATE SET valor = EXCLUDED.valor
+  `).run(contaAtual(), 'diagnosticos.ativos', JSON.stringify(lista));
 }
 
 const router = express.Router();
 
-router.get('/diagnosticos/:slug', (req, res) => {
-  const def = DIAGNOSTICOS[req.params.slug];
-  if (!def || !ativos().includes(req.params.slug)) return res.status(404).json({ erro: 'Diagnóstico não encontrado.' });
-  const nome = db.prepare("SELECT valor FROM configuracoes WHERE chave='identidade.nome'").get()?.valor;
-  res.json({ ...def, marca: MARCA[req.params.slug], sistema: nome });
+router.get('/diagnosticos/:slug', async (req, res, next) => {
+  try {
+    const def = DIAGNOSTICOS[req.params.slug];
+    if (!def || !(await ativos()).includes(req.params.slug)) return res.status(404).json({ erro: 'Diagnóstico não encontrado.' });
+    const nome = (await db.prepare("SELECT valor FROM configuracoes WHERE chave='identidade.nome'").get())?.valor;
+    res.json({ ...def, marca: MARCA[req.params.slug], sistema: nome });
+  } catch (e) { next(e); }
 });
 
-router.post('/diagnosticos/:slug', rateLimit(8, 60_000), (req, res) => {
-  const slug = req.params.slug;
-  const def = DIAGNOSTICOS[slug];
-  if (!def || !ativos().includes(slug)) return res.status(404).json({ erro: 'Diagnóstico não encontrado.' });
-  const body = req.body || {};
-  if (body.website) return res.json({ ok: true }); // honeypot anti-spam
-  const nome = String(body.nome || '').trim().slice(0, 120);
-  const contato = String(body.contato || '').trim().slice(0, 160);
-  const empresa = String(body.empresa || '').trim().slice(0, 160);
-  if (!nome || !contato) return res.status(400).json({ erro: 'Informe seu nome e um contato (WhatsApp ou e-mail).' });
-  if (def.empresa && !empresa) return res.status(400).json({ erro: 'Informe o nome da empresa.' });
-  if (!body.consentimento) return res.status(400).json({ erro: 'Confirme que podemos entrar em contato com o resultado.' });
+router.post('/diagnosticos/:slug', rateLimit(8, 60_000), async (req, res, next) => {
+  try {
+    const slug = req.params.slug;
+    const def = DIAGNOSTICOS[slug];
+    if (!def || !(await ativos()).includes(slug)) return res.status(404).json({ erro: 'Diagnóstico não encontrado.' });
+    const body = req.body || {};
+    if (body.website) return res.json({ ok: true }); // honeypot anti-spam
+    const nome = String(body.nome || '').trim().slice(0, 120);
+    const contato = String(body.contato || '').trim().slice(0, 160);
+    const empresa = String(body.empresa || '').trim().slice(0, 160);
+    if (!nome || !contato) return res.status(400).json({ erro: 'Informe seu nome e um contato (WhatsApp ou e-mail).' });
+    if (def.empresa && !empresa) return res.status(400).json({ erro: 'Informe o nome da empresa.' });
+    if (!body.consentimento) return res.status(400).json({ erro: 'Confirme que podemos entrar em contato com o resultado.' });
 
-  const lidas = lerRespostas(def, body);
-  if (lidas.erro) return res.status(400).json({ erro: lidas.erro });
-  const c = CLASSIFICADORES[slug](lidas.notas, lidas.qual);
-  const canal = ['Instagram', 'WhatsApp', 'LinkedIn', 'E-mail', 'Indicação', 'Site', 'Anúncio'].includes(body.canal) ? body.canal : 'Site';
+    const lidas = lerRespostas(def, body);
+    if (lidas.erro) return res.status(400).json({ erro: lidas.erro });
+    const c = CLASSIFICADORES[slug](lidas.notas, lidas.qual);
+    const canal = ['Instagram', 'WhatsApp', 'LinkedIn', 'E-mail', 'Indicação', 'Site', 'Anúncio'].includes(body.canal) ? body.canal : 'Site';
 
-  const tx = db.transaction(() => {
-    const leadId = registrarLead({ slug, nome, contato, empresa, canal, origem: `Formulário ${def.titulo}`, c });
-    insert('diagnosticos', {
-      tipo: def.tipo, nome: empresa ? `${nome} (${empresa})` : nome, contato,
-      classificacao: c.perfil, temperatura: c.temperatura, lead_id: leadId,
-      resultado: JSON.stringify(c.resultado),
-      respostas: JSON.stringify({ notas: lidas.notas, qualificacao: lidas.qual, pontuacao: c.pontuacao }),
+    const tx = db.transaction(async () => {
+      const leadId = await registrarLead({ slug, nome, contato, empresa, canal, origem: `Formulário ${def.titulo}`, c });
+      await insert('diagnosticos', {
+        tipo: def.tipo, nome: empresa ? `${nome} (${empresa})` : nome, contato,
+        classificacao: c.perfil, temperatura: c.temperatura, lead_id: leadId,
+        resultado: JSON.stringify(c.resultado),
+        respostas: JSON.stringify({ notas: lidas.notas, qualificacao: lidas.qual, pontuacao: c.pontuacao }),
+      });
     });
-  });
-  tx();
-  res.json({ resultado: c.resultado });
+    await tx();
+    res.json({ resultado: c.resultado });
+  } catch (e) { next(e); }
 });
 
 // Webhook para Make / n8n / Tally / Typeform: POST /api/webhooks/lead com header x-webhook-token
-function webhookToken() {
-  let row = db.prepare("SELECT valor FROM configuracoes WHERE chave='webhook_token'").get();
+async function webhookToken() {
+  let row = await db.prepare("SELECT valor FROM configuracoes WHERE chave='webhook_token'").get();
   if (!row) {
     const t = crypto.randomBytes(24).toString('hex');
-    db.prepare("INSERT INTO configuracoes (chave, valor) VALUES ('webhook_token', ?)").run(t);
+    await db.prepare(`
+      INSERT INTO configuracoes (conta_id, chave, valor)
+      VALUES (?, ?, ?)
+      ON CONFLICT (conta_id, chave)
+      DO UPDATE SET valor = EXCLUDED.valor
+    `).run(contaAtual(), 'webhook_token', t);
     row = { valor: t };
   }
   return row.valor;
 }
 
 const webhookRouter = express.Router();
-webhookRouter.post('/lead', rateLimit(60, 60_000), (req, res) => {
-  const token = req.get('x-webhook-token') || req.query.token;
-  const esperado = webhookToken();
-  if (!token || token.length !== esperado.length || !crypto.timingSafeEqual(Buffer.from(token), Buffer.from(esperado))) {
-    return res.status(401).json({ erro: 'Token do webhook inválido.' });
-  }
-  const b = req.body || {};
-  const nome = String(b.nome || b.name || '').trim().slice(0, 120);
-  if (!nome) return res.status(400).json({ erro: 'Campo "nome" é obrigatório.' });
-  const id = insert('leads', {
-    nome,
-    contato: String(b.contato || b.email || b.telefone || b.phone || '').slice(0, 160) || null,
-    empresa: b.empresa ? String(b.empresa).slice(0, 160) : null,
-    canal: 'Outro',
-    origem: String(b.origem || 'Ferramenta externa').slice(0, 120),
-    dor: b.dor ? String(b.dor).slice(0, 2000) : null,
-    observacoes: b.observacoes ? String(b.observacoes).slice(0, 4000) : null,
-    temperatura: ['Quente', 'Morno', 'Frio'].includes(b.temperatura) ? b.temperatura : 'Morno',
-    estagio: 'Novo',
-    proximo_contato: addDays(isoDate(), 1),
-  });
-  res.json({ id });
+webhookRouter.post('/lead', rateLimit(60, 60_000), async (req, res, next) => {
+  try {
+    const token = req.get('x-webhook-token') || req.query.token;
+    const esperado = await webhookToken();
+    if (!token || token.length !== esperado.length || !crypto.timingSafeEqual(Buffer.from(token), Buffer.from(esperado))) {
+      return res.status(401).json({ erro: 'Token do webhook inválido.' });
+    }
+    const b = req.body || {};
+    const nome = String(b.nome || b.name || '').trim().slice(0, 120);
+    if (!nome) return res.status(400).json({ erro: 'Campo "nome" é obrigatório.' });
+    const id = await insert('leads', {
+      nome,
+      contato: String(b.contato || b.email || b.telefone || b.phone || '').slice(0, 160) || null,
+      empresa: b.empresa ? String(b.empresa).slice(0, 160) : null,
+      canal: 'Outro',
+      origem: String(b.origem || 'Ferramenta externa').slice(0, 120),
+      dor: b.dor ? String(b.dor).slice(0, 2000) : null,
+      observacoes: b.observacoes ? String(b.observacoes).slice(0, 4000) : null,
+      temperatura: ['Quente', 'Morno', 'Frio'].includes(b.temperatura) ? b.temperatura : 'Morno',
+      estagio: 'Novo',
+      proximo_contato: addDays(isoDate(), 1),
+    });
+    res.json({ id });
+  } catch (e) { next(e); }
 });
 
 // Contexto de cada linha de negócio, exibido em Formulários e conexões acima do diagnóstico

@@ -4,7 +4,7 @@ const express = require('express');
 const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 
-const { sistema, comConta, db } = require('./db');
+const { sistema, comConta, db, migrate } = require('./db-pg');
 const auth = require('./auth');
 const crud = require('./crud');
 const insights = require('./insights');
@@ -29,13 +29,28 @@ app.use(helmet({
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
+let dbReady;
+app.use('/api', async (req, res, next) => {
+  try {
+    dbReady ||= migrate();
+    await dbReady;
+    next();
+  } catch (e) {
+    next(e);
+  }
+});
+
 // API pública
 app.use('/api/auth', auth.router);
 // Rotas públicas de uma conta (formulários e webhook): identificadas pelo código público da conta
-function contaPublica(req, res, next) {
-  const c = sistema.prepare('SELECT id FROM contas WHERE slug = ?').get(String(req.params.conta || ''));
-  if (!c) return res.status(404).json({ erro: 'Formulário não encontrado.' });
-  comConta(c.id, () => next());
+async function contaPublica(req, res, next) {
+  try {
+    const c = await sistema.prepare('SELECT id FROM contas WHERE slug = ?').get(String(req.params.conta || ''));
+    if (!c) return res.status(404).json({ erro: 'Formulário não encontrado.' });
+    comConta(c.id, () => next());
+  } catch (e) {
+    next(e);
+  }
 }
 app.use('/api/public/:conta', contaPublica, diagnostics.router);
 app.use('/api/webhooks/:conta', contaPublica, diagnostics.webhookRouter);
@@ -46,22 +61,46 @@ app.use('/api', crud.router);
 app.use('/api', insights.router);
 app.use('/api/core', core.router);
 app.use('/api', ia.router);
-app.get('/api/integracoes', auth.requireAuth, (req, res) => {
-  const base = `${req.protocol}://${req.get('host')}`;
-  const slugConta = sistema.prepare('SELECT slug FROM contas WHERE id = ?').get(req.user.conta_id).slug;
-  res.json({
-    webhookUrl: `${base}/api/webhooks/${slugConta}/lead`,
-    webhookToken: diagnostics.webhookToken(),
-    formularios: Object.keys(diagnostics.DIAGNOSTICOS).map((slug) => ({ slug, titulo: diagnostics.DIAGNOSTICOS[slug].titulo, marca: diagnostics.MARCA[slug], contexto: diagnostics.CONTEXTO_MARCA[slug], respostas: db.prepare('SELECT COUNT(*) n FROM diagnosticos WHERE tipo = ?').get(diagnostics.DIAGNOSTICOS[slug].tipo).n, url: `${base}/d/${slugConta}/${slug}`, ativo: diagnostics.ativos().includes(slug) })),
-  });
+app.get('/api/integracoes', auth.requireAuth, async (req, res, next) => {
+  try {
+    const base = `${req.protocol}://${req.get('host')}`;
+    const conta = await sistema.prepare('SELECT slug FROM contas WHERE id = ?').get(req.user.conta_id);
+    const slugConta = conta ? conta.slug : '';
+    const token = await diagnostics.webhookToken();
+    const ativos = await diagnostics.ativos();
+    const formularios = [];
+    for (const slug of Object.keys(diagnostics.DIAGNOSTICOS)) {
+      const n = await db.prepare('SELECT COUNT(*)::int n FROM diagnosticos WHERE tipo = ?').get(diagnostics.DIAGNOSTICOS[slug].tipo);
+      formularios.push({
+        slug,
+        titulo: diagnostics.DIAGNOSTICOS[slug].titulo,
+        marca: diagnostics.MARCA[slug],
+        contexto: diagnostics.CONTEXTO_MARCA[slug],
+        respostas: n ? n.n : 0,
+        url: `${base}/d/${slugConta}/${slug}`,
+        ativo: ativos.includes(slug),
+      });
+    }
+    res.json({
+      webhookUrl: `${base}/api/webhooks/${slugConta}/lead`,
+      webhookToken: token,
+      formularios,
+    });
+  } catch (e) {
+    next(e);
+  }
 });
-app.put('/api/integracoes/formularios/:slug', auth.requireAdmin, (req, res) => {
-  const slug = req.params.slug;
-  if (!diagnostics.DIAGNOSTICOS[slug]) return res.status(404).json({ erro: 'Formulário não encontrado.' });
-  const set = new Set(diagnostics.ativos());
-  if (req.body?.ativo) set.add(slug); else set.delete(slug);
-  diagnostics.setAtivos([...set]);
-  res.json({ ok: true });
+app.put('/api/integracoes/formularios/:slug', auth.requireAdmin, async (req, res, next) => {
+  try {
+    const slug = req.params.slug;
+    if (!diagnostics.DIAGNOSTICOS[slug]) return res.status(404).json({ erro: 'Formulário não encontrado.' });
+    const set = new Set(await diagnostics.ativos());
+    if (req.body?.ativo) set.add(slug); else set.delete(slug);
+    await diagnostics.setAtivos([...set]);
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
 });
 app.use('/api', (req, res) => res.status(404).json({ erro: 'Não encontramos o que você procurou.' }));
 
@@ -86,7 +125,18 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ erro: err.type === 'entity.parse.failed' ? 'Não foi possível ler as informações enviadas. Recarregue a página e tente de novo.' : 'Algo deu errado ao processar seu pedido. Tente de novo em instantes.' });
 });
 
+
+app.get('/api/teste-vercel', (req, res) => {
+  res.json({
+    ok: true,
+    rota: req.originalUrl,
+    caminho: req.path,
+    metodo: req.method
+  });
+});
+
 if (require.main === module) {
+
   const PORT = Number(process.env.PORT) || 3000;
 
   app.listen(PORT, () => {
